@@ -1,22 +1,14 @@
-import { Devvit, Post } from '@devvit/public-api';
+import { Devvit } from '@devvit/public-api';
 
 // Side effect import to bundle the server. The /index is required for server splitting.
 import '../server/index';
 import { defineConfig } from '@devvit/server';
-import { postConfigNew } from '../server/core/post';
 
 defineConfig({
-  name: '[Bolt] Word Guesser',
+  name: '[Bolt] Reddit Impostors',
   entry: 'index.html',
   height: 'tall',
   menu: { enable: false },
-  // TODO: Cannot use without ability to pass in more metadata
-  // menu: {
-  //   enable: true,
-  //   label: 'New Word Guesser Post',
-  //   postTitle: 'Word Guesser',
-  //   preview: <Preview />,
-  // },
 });
 
 export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Loading...' }) => {
@@ -40,38 +32,33 @@ export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Load
   );
 };
 
-// TODO: Remove this when defineConfig allows webhooks before post creation
+// Create game posts via menu
 Devvit.addMenuItem({
-  // Please update as you work on your idea!
-  label: '[Bolt Word Guesser]: New Post',
+  label: '[Reddit Impostors]: New Game',
   location: 'subreddit',
   forUserType: 'moderator',
   onPress: async (_event, context) => {
     const { reddit, ui } = context;
 
-    let post: Post | undefined;
+    let post;
     try {
       const subreddit = await reddit.getCurrentSubreddit();
       post = await reddit.submitPost({
-        // Title of the post. You'll want to update!
-        title: 'Word Guesser',
+        title: 'Reddit Impostors - Among Us Style Game',
         subredditName: subreddit.name,
-        preview: <Preview />,
+        preview: <Preview text="Click to join the social deduction game!" />,
       });
-      await postConfigNew({
-        redis: context.redis,
-        postId: post.id,
-      });
-      ui.showToast({ text: 'Created post!' });
+      
+      ui.showToast({ text: 'Created Reddit Impostors game!' });
       ui.navigateTo(post.url);
     } catch (error) {
       if (post) {
         await post.remove(false);
       }
       if (error instanceof Error) {
-        ui.showToast({ text: `Error creating post: ${error.message}` });
+        ui.showToast({ text: `Error creating game: ${error.message}` });
       } else {
-        ui.showToast({ text: 'Error creating post!' });
+        ui.showToast({ text: 'Error creating game!' });
       }
     }
   },
