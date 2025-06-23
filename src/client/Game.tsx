@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameLobby } from './components/GameLobby';
 import { GameBoard } from './components/GameBoard';
 import { GameResults } from './components/GameResults';
 import { GameState, Player, Impostor } from '../shared/types/game';
@@ -88,13 +87,16 @@ export const Game: React.FC = () => {
     }
   }, []);
 
-  const joinGame = useCallback(async (username: string) => {
+  const autoJoinGame = useCallback(async () => {
     setLoading(true);
     try {
+      // Generate a random username
+      const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
+      
       const response = await fetch('/api/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username: randomUsername }),
       });
       
       const result = await response.json();
@@ -103,6 +105,26 @@ export const Game: React.FC = () => {
         setGameState(result.gameState);
         setCurrentPlayer(result.gameState.players[result.playerId]);
         setError('');
+        
+        // Auto-start the game if we're the host
+        if (result.gameState.host === result.playerId && result.gameState.phase === 'waiting') {
+          setTimeout(async () => {
+            try {
+              const startResponse = await fetch('/api/start-game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+              
+              const startResult = await startResponse.json();
+              
+              if (startResult.status === 'success') {
+                setGameState(startResult.gameState);
+              }
+            } catch (err) {
+              console.error('Error auto-starting game:', err);
+            }
+          }, 500);
+        }
       } else {
         setError(result.message || 'Error joining game');
       }
@@ -111,27 +133,6 @@ export const Game: React.FC = () => {
       setError('Network error');
     } finally {
       setLoading(false);
-    }
-  }, []);
-
-  const startGame = useCallback(async () => {
-    try {
-      const response = await fetch('/api/start-game', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
-      } else {
-        setError(result.message || 'Error starting game');
-      }
-    } catch (err) {
-      console.error('Error starting game:', err);
-      setError('Network error');
     }
   }, []);
 
@@ -209,19 +210,26 @@ export const Game: React.FC = () => {
     };
   }, [gameState]);
 
-  // Initial load
+  // Auto-join game on initial load
   useEffect(() => {
     const init = async () => {
-      await fetchGameState();
-      setLoading(false);
+      const existingGame = await fetchGameState();
+      if (!gameState) {
+        await autoJoinGame();
+      } else {
+        setLoading(false);
+      }
     };
     init();
-  }, [fetchGameState]);
+  }, []);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <div className="text-center">
+          <div className="text-white text-xl mb-4">Loading game...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+        </div>
       </div>
     );
   }
@@ -229,23 +237,22 @@ export const Game: React.FC = () => {
   const renderGameContent = () => {
     if (!gameState) {
       return (
-        <GameLobby
-          onJoinGame={joinGame}
-          error={error}
-        />
+        <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+          <div className="text-white text-xl">Failed to load game</div>
+        </div>
       );
     }
 
     switch (gameState.phase) {
       case 'waiting':
+        // Show a brief waiting message then auto-start
         return (
-          <GameLobby
-            gameState={gameState}
-            currentPlayer={currentPlayer}
-            onJoinGame={joinGame}
-            onStartGame={startGame}
-            error={error}
-          />
+          <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-white text-xl mb-4">Preparing game...</div>
+              <div className="animate-pulse text-gray-400">Starting in a moment...</div>
+            </div>
+          </div>
         );
       
       case 'playing':
