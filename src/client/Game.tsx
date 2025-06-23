@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameLobby } from './components/GameLobby';
 import { GameBoard } from './components/GameBoard';
-import { DiscussionVoting } from './components/DiscussionVoting';
 import { GameResults } from './components/GameResults';
-import { GameState, Player } from '../shared/types/game';
+import { GameState, Player, Impostor } from '../shared/types/game';
 import packageJson from '../../package.json';
 
 const Banner = () => {
@@ -136,11 +135,12 @@ export const Game: React.FC = () => {
     }
   }, []);
 
-  const completeTask = useCallback(async () => {
+  const findImpostor = useCallback(async (x: number, y: number) => {
     try {
-      const response = await fetch('/api/complete-task', {
+      const response = await fetch('/api/find-impostor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x, y }),
       });
       
       const result = await response.json();
@@ -148,80 +148,19 @@ export const Game: React.FC = () => {
       if (result.status === 'success') {
         setGameState(result.gameState);
         setError('');
-        return result.taskCompleted;
+        return {
+          found: result.found,
+          impostor: result.impostor,
+          score: result.score,
+        };
       } else {
-        setError(result.message || 'Error completing task');
-        return false;
+        setError(result.message || 'Error finding impostor');
+        return { found: false, score: 0 };
       }
     } catch (err) {
-      console.error('Error completing task:', err);
+      console.error('Error finding impostor:', err);
       setError('Network error');
-      return false;
-    }
-  }, []);
-
-  const callEmergencyMeeting = useCallback(async () => {
-    try {
-      const response = await fetch('/api/emergency-meeting', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
-      } else {
-        setError(result.message || 'Error calling emergency meeting');
-      }
-    } catch (err) {
-      console.error('Error calling emergency meeting:', err);
-      setError('Network error');
-    }
-  }, []);
-
-  const eliminatePlayer = useCallback(async (targetId: string) => {
-    try {
-      const response = await fetch('/api/eliminate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId }),
-      });
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
-      } else {
-        setError(result.message || 'Error eliminating player');
-      }
-    } catch (err) {
-      console.error('Error eliminating player:', err);
-      setError('Network error');
-    }
-  }, []);
-
-  const castVote = useCallback(async (targetId?: string) => {
-    try {
-      const response = await fetch('/api/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetId }),
-      });
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
-      } else {
-        setError(result.message || 'Error casting vote');
-      }
-    } catch (err) {
-      console.error('Error casting vote:', err);
-      setError('Network error');
+      return { found: false, score: 0 };
     }
   }, []);
 
@@ -248,19 +187,19 @@ export const Game: React.FC = () => {
     };
   }, [gameState, fetchGameState]);
 
-  // Update game phase timer
+  // Update game timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (gameState && (gameState.phase === 'discussion' || gameState.phase === 'voting')) {
+    if (gameState && gameState.phase === 'playing') {
       interval = setInterval(async () => {
         try {
-          await fetch('/api/update-phase', {
+          await fetch('/api/update-timer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
           });
         } catch (err) {
-          console.error('Error updating phase:', err);
+          console.error('Error updating timer:', err);
         }
       }, 1000); // Update every second
     }
@@ -314,20 +253,7 @@ export const Game: React.FC = () => {
           <GameBoard
             gameState={gameState}
             currentPlayer={currentPlayer}
-            onCompleteTask={completeTask}
-            onCallEmergencyMeeting={callEmergencyMeeting}
-            onEliminatePlayer={eliminatePlayer}
-            error={error}
-          />
-        );
-      
-      case 'discussion':
-      case 'voting':
-        return (
-          <DiscussionVoting
-            gameState={gameState}
-            currentPlayer={currentPlayer}
-            onCastVote={castVote}
+            onFindImpostor={findImpostor}
             error={error}
           />
         );

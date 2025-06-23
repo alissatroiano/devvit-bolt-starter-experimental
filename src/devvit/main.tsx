@@ -31,7 +31,7 @@ export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Load
 
 // Add a custom post type to Devvit
 Devvit.addCustomPostType({
-  name: 'Reddit Impostors Game',
+  name: 'Find the Impostors Game',
   height: 'tall',
   render: (context) => {
     // Load username with `useAsync` hook
@@ -58,20 +58,20 @@ Devvit.addCustomPostType({
       <vstack grow padding="small">
         <vstack grow alignment="middle center">
           <text size="xlarge" weight="bold">
-            Reddit Impostors
+            Find the Impostors!
           </text>
           <spacer />
           <vstack alignment="start middle">
             <text size="medium">Welcome, {username ?? 'Player'}!</text>
             <spacer size="small" />
             <text size="small" color="secondary">
-              🚀 Crewmates: Complete tasks to win
+              🔍 Find all the hidden impostors in the crowd
             </text>
             <text size="small" color="secondary">
-              🔪 Impostors: Eliminate crewmates without getting caught
+              ⏱️ Race against time and other players
             </text>
             <text size="small" color="secondary">
-              🗳️ Vote out suspicious players in discussions
+              🏆 Score points based on difficulty and speed
             </text>
           </vstack>
           <spacer />
@@ -84,7 +84,7 @@ Devvit.addCustomPostType({
 
 // Create game posts via menu
 Devvit.addMenuItem({
-  label: '[Reddit Impostors] New Game',
+  label: '[Find the Impostors] New Game',
   location: 'subreddit',
   forUserType: 'moderator',
   onPress: async (_event, context) => {
@@ -94,12 +94,12 @@ Devvit.addMenuItem({
     try {
       const subreddit = await reddit.getCurrentSubreddit();
       post = await reddit.submitPost({
-        title: 'Reddit Impostors - Among Us Style Game',
+        title: 'Find the Impostors - Hidden Object Game',
         subredditName: subreddit.name,
-        preview: <Preview text="Click to join the social deduction game!" />,
+        preview: <Preview text="Click to start the hidden object challenge!" />,
       });
       
-      ui.showToast({ text: 'Created Reddit Impostors game!' });
+      ui.showToast({ text: 'Created Find the Impostors game!' });
       ui.navigateTo(post.url);
     } catch (error) {
       if (post) {

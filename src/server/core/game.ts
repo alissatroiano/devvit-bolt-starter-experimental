@@ -1,15 +1,34 @@
 import { Context } from '@devvit/public-api';
 import { RedisClient } from '@devvit/redis';
-import { GameState, Player, PlayerRole, PlayerStatus } from '../../shared/types/game';
+import { GameState, Player, Impostor } from '../../shared/types/game';
 
 const GAME_EXPIRY = 60 * 60 * 4; // 4 hours
-const DISCUSSION_TIME = 45; // seconds
-const VOTING_TIME = 30; // seconds
-const MIN_PLAYERS = 4;
-const MAX_PLAYERS = 10;
+const TIME_LIMIT = 300; // 5 minutes
+const MIN_PLAYERS = 1;
+const MAX_PLAYERS = 20;
 
 const getGameKey = (postId: string) => `game:${postId}` as const;
-const getPlayerKey = (postId: string, playerId: string) => `player:${postId}:${playerId}` as const;
+
+// Predefined impostor locations for the crowd scene
+const IMPOSTOR_LOCATIONS: Omit<Impostor, 'id' | 'found' | 'foundBy' | 'foundAt'>[] = [
+  // Easy to spot (larger, more obvious)
+  { x: 15, y: 25, width: 8, height: 12, difficulty: 'easy' },
+  { x: 75, y: 40, width: 7, height: 11, difficulty: 'easy' },
+  { x: 45, y: 70, width: 8, height: 13, difficulty: 'easy' },
+  
+  // Medium difficulty (smaller, partially hidden)
+  { x: 30, y: 15, width: 5, height: 8, difficulty: 'medium' },
+  { x: 85, y: 60, width: 6, height: 9, difficulty: 'medium' },
+  { x: 20, y: 80, width: 5, height: 7, difficulty: 'medium' },
+  { x: 65, y: 20, width: 6, height: 8, difficulty: 'medium' },
+  
+  // Hard to spot (very small, well hidden)
+  { x: 55, y: 35, width: 3, height: 5, difficulty: 'hard' },
+  { x: 10, y: 55, width: 4, height: 6, difficulty: 'hard' },
+  { x: 90, y: 25, width: 3, height: 4, difficulty: 'hard' },
+  { x: 40, y: 85, width: 4, height: 5, difficulty: 'hard' },
+  { x: 70, y: 75, width: 3, height: 5, difficulty: 'hard' },
+];
 
 export const createGame = async ({
   redis,
@@ -22,22 +41,28 @@ export const createGame = async ({
   hostId: string;
   hostUsername: string;
 }): Promise<GameState> => {
+  // Generate impostors with unique IDs
+  const impostors: Impostor[] = IMPOSTOR_LOCATIONS.map((location, index) => ({
+    ...location,
+    id: `impostor_${index}`,
+    found: false,
+  }));
+
   const gameState: GameState = {
     id: postId,
     phase: 'waiting',
     players: {},
+    impostors,
     host: hostId,
+    timeLimit: TIME_LIMIT,
+    leaderboard: [],
   };
 
   const host: Player = {
     id: hostId,
     username: hostUsername,
-    role: 'crewmate',
-    status: 'alive',
-    position: { x: 50, y: 50 },
-    tasksCompleted: 0,
-    totalTasks: 3,
-    hasVoted: false,
+    score: 0,
+    foundImpostors: [],
   };
 
   gameState.players[hostId] = host;
@@ -81,10 +106,6 @@ export const joinGame = async ({
   const gameState = await getGame({ redis, postId });
   if (!gameState) return null;
 
-  if (gameState.phase !== 'waiting') {
-    return null; // Can't join game in progress
-  }
-
   if (Object.keys(gameState.players).length >= MAX_PLAYERS) {
     return null; // Game full
   }
@@ -96,13 +117,13 @@ export const joinGame = async ({
   const player: Player = {
     id: playerId,
     username,
-    role: 'crewmate',
-    status: 'alive',
-    position: { x: Math.random() * 80 + 10, y: Math.random() * 80 + 10 },
-    tasksCompleted: 0,
-    totalTasks: 3,
-    hasVoted: false,
+    score: 0,
+    foundImpostors: [],
   };
+
+  if (gameState.phase === 'playing') {
+    player.timeStarted = Date.now();
+  }
 
   gameState.players[playerId] = player;
   await updateGame({ redis, gameState });
@@ -127,249 +148,142 @@ export const startGame = async ({
   const playerCount = Object.keys(gameState.players).length;
   if (playerCount < MIN_PLAYERS) return null; // Not enough players
 
-  // Assign roles
-  const playerIds = Object.keys(gameState.players);
-  const impostorCount = Math.max(1, Math.floor(playerCount / 4));
-  const impostorIds = playerIds.sort(() => Math.random() - 0.5).slice(0, impostorCount);
-
-  Object.values(gameState.players).forEach((player) => {
-    player.role = impostorIds.includes(player.id) ? 'impostor' : 'crewmate';
-    player.hasVoted = false;
-    player.votedFor = undefined;
-  });
-
   gameState.phase = 'playing';
   gameState.gameStartTime = Date.now();
-  await updateGame({ redis, gameState });
-  return gameState;
-};
+  gameState.timeLeft = TIME_LIMIT;
 
-export const completeTask = async ({
-  redis,
-  postId,
-  playerId,
-}: {
-  redis: Context['redis'] | RedisClient;
-  postId: string;
-  playerId: string;
-}): Promise<{ gameState: GameState | null; taskCompleted: boolean }> => {
-  const gameState = await getGame({ redis, postId });
-  if (!gameState) return { gameState: null, taskCompleted: false };
-
-  const player = gameState.players[playerId];
-  if (!player || player.status !== 'alive' || player.role !== 'crewmate') {
-    return { gameState, taskCompleted: false };
-  }
-
-  if (player.tasksCompleted < player.totalTasks) {
-    player.tasksCompleted++;
-  }
-
-  // Check for crewmate victory
-  const crewmates = Object.values(gameState.players).filter(p => p.role === 'crewmate' && p.status === 'alive');
-  const totalTasks = crewmates.reduce((sum, p) => sum + p.totalTasks, 0);
-  const completedTasks = crewmates.reduce((sum, p) => sum + p.tasksCompleted, 0);
-
-  if (completedTasks >= totalTasks) {
-    gameState.phase = 'ended';
-    gameState.winner = 'crewmates';
-  }
-
-  await updateGame({ redis, gameState });
-  return { gameState, taskCompleted: true };
-};
-
-export const callEmergencyMeeting = async ({
-  redis,
-  postId,
-  playerId,
-}: {
-  redis: Context['redis'] | RedisClient;
-  postId: string;
-  playerId: string;
-}): Promise<GameState | null> => {
-  const gameState = await getGame({ redis, postId });
-  if (!gameState) return null;
-
-  const player = gameState.players[playerId];
-  if (!player || player.status !== 'alive' || gameState.phase !== 'playing') {
-    return null;
-  }
-
-  gameState.phase = 'discussion';
-  gameState.discussionTimeLeft = DISCUSSION_TIME;
-  gameState.meetingCaller = playerId;
-
-  // Reset votes
-  Object.values(gameState.players).forEach(p => {
-    p.hasVoted = false;
-    p.votedFor = undefined;
+  // Set start time for all players
+  Object.values(gameState.players).forEach((player) => {
+    player.timeStarted = Date.now();
   });
 
   await updateGame({ redis, gameState });
   return gameState;
 };
 
-export const eliminatePlayer = async ({
+export const findImpostor = async ({
   redis,
   postId,
-  targetId,
-  impostorId,
+  playerId,
+  x,
+  y,
 }: {
   redis: Context['redis'] | RedisClient;
   postId: string;
-  targetId: string;
-  impostorId: string;
-}): Promise<GameState | null> => {
+  playerId: string;
+  x: number;
+  y: number;
+}): Promise<{ gameState: GameState | null; found: boolean; impostor?: Impostor; score: number }> => {
   const gameState = await getGame({ redis, postId });
-  if (!gameState) return null;
+  if (!gameState) return { gameState: null, found: false, score: 0 };
 
-  const impostor = gameState.players[impostorId];
-  const target = gameState.players[targetId];
-
-  if (!impostor || !target || impostor.role !== 'impostor' || impostor.status !== 'alive' || target.status !== 'alive') {
-    return null;
+  const player = gameState.players[playerId];
+  if (!player || gameState.phase !== 'playing') {
+    return { gameState, found: false, score: player?.score || 0 };
   }
 
-  target.status = 'dead';
-  gameState.eliminatedPlayer = targetId;
+  // Check if click is within any impostor's bounds
+  const foundImpostor = gameState.impostors.find(impostor => {
+    if (impostor.found) return false;
+    
+    const withinX = x >= impostor.x && x <= impostor.x + impostor.width;
+    const withinY = y >= impostor.y && y <= impostor.y + impostor.height;
+    
+    return withinX && withinY;
+  });
 
-  // Check win conditions
-  const alivePlayers = Object.values(gameState.players).filter(p => p.status === 'alive');
-  const aliveImpostors = alivePlayers.filter(p => p.role === 'impostor');
-  const aliveCrewmates = alivePlayers.filter(p => p.role === 'crewmate');
+  if (foundImpostor) {
+    // Mark impostor as found
+    foundImpostor.found = true;
+    foundImpostor.foundBy = playerId;
+    foundImpostor.foundAt = Date.now();
 
-  if (aliveImpostors.length >= aliveCrewmates.length) {
+    // Add to player's found list
+    player.foundImpostors.push(foundImpostor.id);
+
+    // Calculate score based on difficulty and time
+    let points = 0;
+    switch (foundImpostor.difficulty) {
+      case 'easy': points = 10; break;
+      case 'medium': points = 25; break;
+      case 'hard': points = 50; break;
+    }
+
+    // Time bonus (faster = more points)
+    const timeElapsed = (Date.now() - (player.timeStarted || Date.now())) / 1000;
+    const timeBonus = Math.max(0, Math.floor((TIME_LIMIT - timeElapsed) / 10));
+    
+    player.score += points + timeBonus;
+
+    // Check if all impostors found or if this player found them all
+    const allFound = gameState.impostors.every(imp => imp.found);
+    const playerFoundAll = player.foundImpostors.length === gameState.impostors.length;
+
+    if (allFound || playerFoundAll) {
+      gameState.phase = 'ended';
+      gameState.gameEndTime = Date.now();
+      gameState.winner = playerId;
+      player.timeCompleted = Date.now();
+
+      // Update leaderboard
+      updateLeaderboard(gameState);
+    }
+
+    await updateGame({ redis, gameState });
+    return { gameState, found: true, impostor: foundImpostor, score: player.score };
+  }
+
+  return { gameState, found: false, score: player.score };
+};
+
+export const updateGameTimer = async ({
+  redis,
+  postId,
+}: {
+  redis: Context['redis'] | RedisClient;
+  postId: string;
+}): Promise<GameState | null> => {
+  const gameState = await getGame({ redis, postId });
+  if (!gameState || gameState.phase !== 'playing') return gameState;
+
+  const elapsed = Math.floor((Date.now() - (gameState.gameStartTime || Date.now())) / 1000);
+  gameState.timeLeft = Math.max(0, TIME_LIMIT - elapsed);
+
+  if (gameState.timeLeft === 0) {
     gameState.phase = 'ended';
-    gameState.winner = 'impostors';
-  } else {
-    // Start emergency meeting for body discovery
-    gameState.phase = 'discussion';
-    gameState.discussionTimeLeft = DISCUSSION_TIME;
-    gameState.meetingCaller = impostorId;
+    gameState.gameEndTime = Date.now();
+    
+    // Find winner (highest score)
+    const players = Object.values(gameState.players);
+    const winner = players.reduce((best, current) => 
+      current.score > best.score ? current : best
+    );
+    
+    if (winner.score > 0) {
+      gameState.winner = winner.id;
+    }
+
+    updateLeaderboard(gameState);
   }
 
   await updateGame({ redis, gameState });
   return gameState;
 };
 
-export const castVote = async ({
-  redis,
-  postId,
-  voterId,
-  targetId,
-}: {
-  redis: Context['redis'] | RedisClient;
-  postId: string;
-  voterId: string;
-  targetId?: string; // undefined means skip vote
-}): Promise<GameState | null> => {
-  const gameState = await getGame({ redis, postId });
-  if (!gameState) return null;
-
-  const voter = gameState.players[voterId];
-  if (!voter || voter.status !== 'alive' || gameState.phase !== 'voting') {
-    return null;
-  }
-
-  voter.hasVoted = true;
-  voter.votedFor = targetId;
-
-  // Check if all alive players have voted
-  const alivePlayers = Object.values(gameState.players).filter(p => p.status === 'alive');
-  const votedPlayers = alivePlayers.filter(p => p.hasVoted);
-
-  if (votedPlayers.length === alivePlayers.length) {
-    // Count votes
-    const votes: Record<string, number> = {};
-    let skipCount = 0;
-
-    alivePlayers.forEach(player => {
-      if (player.votedFor) {
-        votes[player.votedFor] = (votes[player.votedFor] || 0) + 1;
-      } else {
-        skipCount++;
+function updateLeaderboard(gameState: GameState): void {
+  gameState.leaderboard = Object.values(gameState.players)
+    .map(player => ({
+      playerId: player.id,
+      username: player.username,
+      score: player.score,
+      timeCompleted: player.timeCompleted,
+    }))
+    .sort((a, b) => {
+      // Sort by score first, then by completion time
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.timeCompleted && b.timeCompleted) {
+        return a.timeCompleted - b.timeCompleted;
       }
+      return 0;
     });
-
-    // Find player with most votes
-    let mostVoted = '';
-    let maxVotes = 0;
-    let tie = false;
-
-    Object.entries(votes).forEach(([playerId, voteCount]) => {
-      if (voteCount > maxVotes) {
-        mostVoted = playerId;
-        maxVotes = voteCount;
-        tie = false;
-      } else if (voteCount === maxVotes && maxVotes > 0) {
-        tie = true;
-      }
-    });
-
-    // Eliminate player if they have majority and no tie
-    if (mostVoted && !tie && maxVotes > skipCount) {
-      const eliminatedPlayer = gameState.players[mostVoted];
-      if (eliminatedPlayer) {
-        eliminatedPlayer.status = 'dead';
-        gameState.eliminatedPlayer = mostVoted;
-      }
-    }
-
-    // Check win conditions
-    const remainingAlivePlayers = Object.values(gameState.players).filter(p => p.status === 'alive');
-    const remainingImpostors = remainingAlivePlayers.filter(p => p.role === 'impostor');
-    const remainingCrewmates = remainingAlivePlayers.filter(p => p.role === 'crewmate');
-
-    if (remainingImpostors.length === 0) {
-      gameState.phase = 'ended';
-      gameState.winner = 'crewmates';
-    } else if (remainingImpostors.length >= remainingCrewmates.length) {
-      gameState.phase = 'ended';
-      gameState.winner = 'impostors';
-    } else {
-      gameState.phase = 'playing';
-    }
-
-    // Reset votes
-    Object.values(gameState.players).forEach(p => {
-      p.hasVoted = false;
-      p.votedFor = undefined;
-    });
-  }
-
-  await updateGame({ redis, gameState });
-  return gameState;
-};
-
-export const updateGamePhase = async ({
-  redis,
-  postId,
-}: {
-  redis: Context['redis'] | RedisClient;
-  postId: string;
-}): Promise<GameState | null> => {
-  const gameState = await getGame({ redis, postId });
-  if (!gameState) return null;
-
-  if (gameState.phase === 'discussion' && gameState.discussionTimeLeft !== undefined) {
-    gameState.discussionTimeLeft = Math.max(0, gameState.discussionTimeLeft - 1);
-    if (gameState.discussionTimeLeft === 0) {
-      gameState.phase = 'voting';
-      gameState.votingTimeLeft = VOTING_TIME;
-    }
-  } else if (gameState.phase === 'voting' && gameState.votingTimeLeft !== undefined) {
-    gameState.votingTimeLeft = Math.max(0, gameState.votingTimeLeft - 1);
-    if (gameState.votingTimeLeft === 0) {
-      // Auto-skip votes for players who haven't voted
-      gameState.phase = 'playing';
-      Object.values(gameState.players).forEach(p => {
-        p.hasVoted = false;
-        p.votedFor = undefined;
-      });
-    }
-  }
-
-  await updateGame({ redis, gameState });
-  return gameState;
-};
+}

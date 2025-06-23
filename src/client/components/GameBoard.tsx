@@ -1,233 +1,209 @@
-import React from 'react';
-import { GameState, Player } from '../../shared/types/game';
+import React, { useState, useRef, useCallback } from 'react';
+import { GameState, Player, Impostor } from '../../shared/types/game';
 
 interface GameBoardProps {
   gameState: GameState;
   currentPlayer: Player | null;
-  onCompleteTask: () => Promise<boolean>;
-  onCallEmergencyMeeting: () => Promise<void>;
-  onEliminatePlayer: (targetId: string) => Promise<void>;
+  onFindImpostor: (x: number, y: number) => Promise<{ found: boolean; impostor?: Impostor; score: number }>;
   error: string;
 }
 
 export const GameBoard: React.FC<GameBoardProps> = ({
   gameState,
   currentPlayer,
-  onCompleteTask,
-  onCallEmergencyMeeting,
-  onEliminatePlayer,
+  onFindImpostor,
   error,
 }) => {
-  const players = Object.values(gameState.players);
-  const alivePlayers = players.filter(p => p.status === 'alive');
-  const deadPlayers = players.filter(p => p.status === 'dead');
-  
-  const handleCompleteTask = async () => {
-    const completed = await onCompleteTask();
-    if (completed && currentPlayer) {
-      // Show success feedback
+  const [clicking, setClicking] = useState(false);
+  const [lastClick, setLastClick] = useState<{ x: number; y: number } | null>(null);
+  const [showSuccess, setShowSuccess] = useState<{ impostor: Impostor; x: number; y: number } | null>(null);
+  const gameAreaRef = useRef<HTMLDivElement>(null);
+
+  const handleClick = useCallback(async (event: React.MouseEvent<HTMLDivElement>) => {
+    if (clicking || gameState.phase !== 'playing') return;
+
+    const rect = gameAreaRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // Calculate percentage position
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+
+    setClicking(true);
+    setLastClick({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+
+    try {
+      const result = await onFindImpostor(x, y);
+      
+      if (result.found && result.impostor) {
+        setShowSuccess({
+          impostor: result.impostor,
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        });
+        
+        setTimeout(() => setShowSuccess(null), 2000);
+      }
+    } catch (err) {
+      console.error('Error finding impostor:', err);
+    } finally {
+      setClicking(false);
+      setTimeout(() => setLastClick(null), 500);
     }
+  }, [clicking, gameState.phase, onFindImpostor]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleEliminate = (targetId: string) => {
-    if (currentPlayer?.role === 'impostor' && currentPlayer.status === 'alive') {
-      onEliminatePlayer(targetId);
-    }
-  };
-
-  const isImpostor = currentPlayer?.role === 'impostor';
-  const isAlive = currentPlayer?.status === 'alive';
-  const canAct = isAlive && currentPlayer;
-
-  // Calculate task progress
-  const totalTasks = alivePlayers
-    .filter(p => p.role === 'crewmate')
-    .reduce((sum, p) => sum + p.totalTasks, 0);
-  const completedTasks = alivePlayers
-    .filter(p => p.role === 'crewmate')
-    .reduce((sum, p) => sum + p.tasksCompleted, 0);
-  const taskProgress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const foundCount = currentPlayer?.foundImpostors.length || 0;
+  const totalCount = gameState.impostors.length;
+  const timeLeft = gameState.timeLeft || 0;
 
   return (
-    <div className="min-h-screen p-4 space-y-6">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="bg-gray-800 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-white">Reddit Impostors</h1>
-          <div className="text-right">
-            {currentPlayer && (
-              <div className="text-sm">
-                <div className={`font-bold ${isImpostor ? 'text-red-400' : 'text-cyan-400'}`}>
-                  You are {isImpostor ? 'an IMPOSTOR' : 'a CREWMATE'}
-                </div>
-                <div className="text-gray-400">
-                  Status: {currentPlayer.status === 'alive' ? '🟢 Alive' : '💀 Dead'}
-                </div>
+      <div className="bg-gray-800 p-4 shadow-lg">
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center space-x-6">
+            <h1 className="text-2xl font-bold text-red-400">Find the Impostors!</h1>
+            <div className="flex items-center space-x-4 text-lg">
+              <div className="bg-blue-600 px-3 py-1 rounded">
+                Found: {foundCount}/{totalCount}
               </div>
-            )}
+              <div className="bg-green-600 px-3 py-1 rounded">
+                Score: {currentPlayer?.score || 0}
+              </div>
+              <div className={`px-3 py-1 rounded ${timeLeft <= 30 ? 'bg-red-600' : 'bg-yellow-600'}`}>
+                Time: {formatTime(timeLeft)}
+              </div>
+            </div>
+          </div>
+          
+          <div className="text-right">
+            <div className="text-sm text-gray-300">Playing as</div>
+            <div className="font-semibold">{currentPlayer?.username}</div>
           </div>
         </div>
-
-        {/* Task Progress Bar */}
-        {!isImpostor && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between text-sm text-gray-300 mb-2">
-              <span>Crew Tasks Progress</span>
-              <span>{completedTasks}/{totalTasks}</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-3">
-              <div
-                className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${taskProgress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        {canAct && (
-          <div className="flex gap-3">
-            {!isImpostor && (
-              <button
-                onClick={handleCompleteTask}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors"
-                disabled={currentPlayer.tasksCompleted >= currentPlayer.totalTasks}
-              >
-                Complete Task ({currentPlayer.tasksCompleted}/{currentPlayer.totalTasks})
-              </button>
-            )}
-            
-            <button
-              onClick={onCallEmergencyMeeting}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-medium transition-colors"
-            >
-              🚨 Emergency Meeting
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Player Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {/* Alive Players */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-green-400">Alive Players ({alivePlayers.length})</h2>
-          {alivePlayers.map((player) => (
-            <div
-              key={player.id}
-              className={`p-4 rounded-lg border-2 transition-all ${
-                player.id === currentPlayer?.id
-                  ? 'bg-blue-600 bg-opacity-20 border-blue-500'
-                  : 'bg-gray-700 border-gray-600 hover:border-gray-500'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                    player.role === 'impostor' && isImpostor ? 'bg-red-500' : 'bg-blue-500'
-                  }`}>
-                    {player.username.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="font-medium text-white">{player.username}</div>
-                    {player.id === currentPlayer?.id && (
-                      <div className="text-sm text-gray-400">(You)</div>
-                    )}
-                    {isImpostor && player.role === 'impostor' && player.id !== currentPlayer?.id && (
-                      <div className="text-sm text-red-400">(Fellow Impostor)</div>
-                    )}
-                  </div>
-                </div>
-                
-                {isImpostor && canAct && player.id !== currentPlayer?.id && player.role !== 'impostor' && (
-                  <button
-                    onClick={() => handleEliminate(player.id)}
-                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition-colors"
-                  >
-                    🔪 Eliminate
-                  </button>
-                )}
+      {/* Game Area */}
+      <div className="relative max-w-6xl mx-auto p-4">
+        <div
+          ref={gameAreaRef}
+          className="relative w-full h-[600px] bg-gradient-to-b from-blue-400 to-green-400 rounded-lg overflow-hidden cursor-crosshair"
+          onClick={handleClick}
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='crowd' patternUnits='userSpaceOnUse' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='8' fill='%23333' opacity='0.1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23crowd)'/%3E%3C/svg%3E")`,
+          }}
+        >
+          {/* Crowd simulation with CSS */}
+          <div className="absolute inset-0 opacity-30">
+            {Array.from({ length: 200 }, (_, i) => (
+              <div
+                key={i}
+                className="absolute w-3 h-3 bg-gray-800 rounded-full"
+                style={{
+                  left: `${Math.random() * 95}%`,
+                  top: `${Math.random() * 95}%`,
+                  transform: `scale(${0.5 + Math.random() * 0.5})`,
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Found impostors markers */}
+          {gameState.impostors
+            .filter(impostor => impostor.found)
+            .map((impostor) => (
+              <div
+                key={impostor.id}
+                className="absolute border-4 border-green-500 bg-green-500 bg-opacity-20 rounded-lg flex items-center justify-center"
+                style={{
+                  left: `${impostor.x}%`,
+                  top: `${impostor.y}%`,
+                  width: `${impostor.width}%`,
+                  height: `${impostor.height}%`,
+                }}
+              >
+                <div className="text-green-500 font-bold text-xl">✓</div>
               </div>
-              
-              {player.role === 'crewmate' && (
-                <div className="mt-2">
-                  <div className="text-sm text-gray-400 mb-1">
-                    Tasks: {player.tasksCompleted}/{player.totalTasks}
-                  </div>
-                  <div className="w-full bg-gray-600 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full transition-all"
-                      style={{ width: `${(player.tasksCompleted / player.totalTasks) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+            ))}
+
+          {/* Click feedback */}
+          {lastClick && (
+            <div
+              className="absolute w-8 h-8 border-4 border-red-500 rounded-full animate-ping"
+              style={{
+                left: lastClick.x - 16,
+                top: lastClick.y - 16,
+              }}
+            />
+          )}
+
+          {/* Success animation */}
+          {showSuccess && (
+            <div
+              className="absolute z-10 pointer-events-none"
+              style={{
+                left: showSuccess.x - 50,
+                top: showSuccess.y - 30,
+              }}
+            >
+              <div className="bg-green-500 text-white px-4 py-2 rounded-lg font-bold animate-bounce">
+                +{showSuccess.impostor.difficulty === 'easy' ? 10 : 
+                   showSuccess.impostor.difficulty === 'medium' ? 25 : 50} points!
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Instructions overlay */}
+          <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-3 rounded-lg max-w-xs">
+            <h3 className="font-bold mb-2">Instructions:</h3>
+            <ul className="text-sm space-y-1">
+              <li>🔍 Click on suspicious figures in the crowd</li>
+              <li>🟢 Easy impostors: 10 points</li>
+              <li>🟡 Medium impostors: 25 points</li>
+              <li>🔴 Hard impostors: 50 points</li>
+              <li>⚡ Speed bonus for quick finds!</li>
+            </ul>
+          </div>
         </div>
 
-        {/* Dead Players */}
-        {deadPlayers.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold text-red-400">Eliminated ({deadPlayers.length})</h2>
-            {deadPlayers.map((player) => (
-              <div
-                key={player.id}
-                className="p-4 rounded-lg bg-gray-800 border-2 border-gray-700 opacity-75"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white font-bold">
-                    💀
+        {/* Leaderboard */}
+        <div className="mt-6 bg-gray-800 rounded-lg p-4">
+          <h2 className="text-xl font-bold mb-4">Live Leaderboard</h2>
+          <div className="grid gap-2">
+            {Object.values(gameState.players)
+              .sort((a, b) => b.score - a.score)
+              .map((player, index) => (
+                <div
+                  key={player.id}
+                  className={`flex items-center justify-between p-2 rounded ${
+                    player.id === currentPlayer?.id ? 'bg-blue-600 bg-opacity-30' : 'bg-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-gray-600'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <span className="font-medium">{player.username}</span>
+                    {player.id === currentPlayer?.id && (
+                      <span className="text-blue-400 text-sm">(You)</span>
+                    )}
                   </div>
-                  <div>
-                    <div className="font-medium text-gray-300">{player.username}</div>
-                    <div className="text-sm text-gray-500">
-                      Was {player.role === 'impostor' ? 'an Impostor' : 'a Crewmate'}
+                  <div className="text-right">
+                    <div className="font-bold">{player.score} pts</div>
+                    <div className="text-sm text-gray-400">
+                      {player.foundImpostors.length}/{totalCount} found
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Game Info */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold text-blue-400">Game Info</h2>
-          <div className="p-4 bg-gray-700 rounded-lg space-y-2">
-            <div className="text-sm">
-              <span className="text-gray-400">Phase:</span>
-              <span className="ml-2 font-medium text-green-400">Playing</span>
-            </div>
-            <div className="text-sm">
-              <span className="text-gray-400">Players:</span>
-              <span className="ml-2 font-medium">{alivePlayers.length} alive, {deadPlayers.length} eliminated</span>
-            </div>
-            {gameState.gameStartTime && (
-              <div className="text-sm">
-                <span className="text-gray-400">Game Time:</span>
-                <span className="ml-2 font-medium">
-                  {Math.floor((Date.now() - gameState.gameStartTime) / 60000)}m
-                </span>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 bg-gray-700 rounded-lg">
-            <h3 className="font-medium text-white mb-2">Objectives</h3>
-            {isImpostor ? (
-              <div className="text-sm text-red-300 space-y-1">
-                <p>🔪 Eliminate crewmates</p>
-                <p>🎭 Blend in during discussions</p>
-                <p>🗳️ Avoid getting voted out</p>
-              </div>
-            ) : (
-              <div className="text-sm text-cyan-300 space-y-1">
-                <p>⚙️ Complete all tasks</p>
-                <p>🕵️ Find the impostors</p>
-                <p>🗳️ Vote out suspicious players</p>
-              </div>
-            )}
+              ))}
           </div>
         </div>
       </div>

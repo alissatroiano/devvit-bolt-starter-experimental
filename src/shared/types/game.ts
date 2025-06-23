@@ -1,38 +1,44 @@
-export type PlayerRole = 'crewmate' | 'impostor';
-export type PlayerStatus = 'alive' | 'dead' | 'disconnected';
-export type GamePhase = 'waiting' | 'playing' | 'discussion' | 'voting' | 'ended';
+export type GamePhase = 'waiting' | 'playing' | 'ended';
+export type PlayerStatus = 'playing' | 'found' | 'winner';
 
 export interface Player {
   id: string;
   username: string;
-  role: PlayerRole;
-  status: PlayerStatus;
-  position: { x: number; y: number };
-  tasksCompleted: number;
-  totalTasks: number;
-  hasVoted: boolean;
-  votedFor?: string;
+  score: number;
+  foundImpostors: string[];
+  timeStarted?: number;
+  timeCompleted?: number;
+}
+
+export interface Impostor {
+  id: string;
+  x: number; // percentage position
+  y: number; // percentage position
+  width: number;
+  height: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  found: boolean;
+  foundBy?: string; // player ID who found it
+  foundAt?: number; // timestamp
 }
 
 export interface GameState {
   id: string;
   phase: GamePhase;
   players: Record<string, Player>;
+  impostors: Impostor[];
   host: string;
-  winner?: 'crewmates' | 'impostors';
-  discussionTimeLeft?: number;
-  votingTimeLeft?: number;
-  meetingCaller?: string;
-  eliminatedPlayer?: string;
   gameStartTime?: number;
-}
-
-export interface Task {
-  id: string;
-  name: string;
-  description: string;
-  location: string;
-  completed: boolean;
+  gameEndTime?: number;
+  timeLimit: number; // seconds
+  timeLeft?: number;
+  winner?: string; // player ID
+  leaderboard: Array<{
+    playerId: string;
+    username: string;
+    score: number;
+    timeCompleted?: number;
+  }>;
 }
 
 // API Response types
@@ -47,20 +53,13 @@ export type GameStateResponse = Response<{
   gameState: GameState;
 }>;
 
-export type ActionResponse = Response<{
-  gameState: GameState;
-  message?: string;
-}>;
-
 export type StartGameResponse = Response<{
   gameState: GameState;
 }>;
 
-export type VoteResponse = Response<{
+export type FindImpostorResponse = Response<{
   gameState: GameState;
-}>;
-
-export type CompleteTaskResponse = Response<{
-  gameState: GameState;
-  taskCompleted: boolean;
+  found: boolean;
+  impostor?: Impostor;
+  score: number;
 }>;

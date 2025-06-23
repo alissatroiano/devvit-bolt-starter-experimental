@@ -36,15 +36,14 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
   const players = gameState ? Object.values(gameState.players) : [];
   const isHost = currentPlayer && gameState && currentPlayer.id === gameState.host;
-  const canStart = players.length >= 4;
 
   if (!gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-gray-800 rounded-lg p-8 shadow-2xl">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-blue-400 mb-2">Reddit Impostors</h1>
-            <p className="text-gray-300">Join the social deduction game!</p>
+            <h1 className="text-4xl font-bold text-red-400 mb-2">Find the Impostors!</h1>
+            <p className="text-gray-300">Where's Waldo style hidden object game</p>
           </div>
           
           <form onSubmit={handleJoin} className="space-y-4">
@@ -57,7 +56,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-white"
                 placeholder="Your username"
                 disabled={joining}
                 maxLength={20}
@@ -67,9 +66,9 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
             <button
               type="submit"
               disabled={!username.trim() || joining}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+              className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
             >
-              {joining ? 'Joining...' : 'Create Game'}
+              {joining ? 'Creating Game...' : 'Create Game'}
             </button>
           </form>
           
@@ -87,10 +86,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-gray-800 rounded-lg p-8 shadow-2xl">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-400 mb-2">Reddit Impostors</h1>
+          <h1 className="text-4xl font-bold text-red-400 mb-2">Find the Impostors!</h1>
           <p className="text-gray-300">Waiting for players...</p>
           <div className="mt-2 text-sm text-gray-400">
-            {players.length}/10 players • Need at least 4 to start
+            {players.length}/20 players
           </div>
         </div>
 
@@ -107,7 +106,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">
                     {player.username.charAt(0).toUpperCase()}
                   </div>
                   <span className="font-medium text-white">{player.username}</span>
@@ -131,7 +130,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                 id="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white"
+                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-white"
                 placeholder="Your username"
                 disabled={joining}
                 maxLength={20}
@@ -141,7 +140,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
             <button
               type="submit"
               disabled={!username.trim() || joining}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+              className="w-full py-3 px-4 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
             >
               {joining ? 'Joining...' : 'Join Game'}
             </button>
@@ -152,14 +151,9 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
           <div className="text-center">
             <button
               onClick={handleStart}
-              disabled={!canStart}
-              className={`py-3 px-8 rounded-lg font-semibold transition-colors ${
-                canStart
-                  ? 'bg-green-600 hover:bg-green-700 text-white'
-                  : 'bg-gray-600 cursor-not-allowed text-gray-300'
-              }`}
+              className="py-3 px-8 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
             >
-              {canStart ? 'Start Game' : `Need ${4 - players.length} more players`}
+              Start Game
             </button>
           </div>
         )}
@@ -172,9 +166,9 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
         <div className="mt-8 text-center text-sm text-gray-400">
           <p>How to play:</p>
-          <p className="mt-2">🚀 Crewmates: Complete tasks to win</p>
-          <p>🔪 Impostors: Eliminate crewmates without getting caught</p>
-          <p>🗳️ Vote out suspicious players in discussions</p>
+          <p className="mt-2">🔍 Find all the hidden impostors in the crowd</p>
+          <p>⏱️ Race against time and other players</p>
+          <p>🏆 Score points based on difficulty and speed</p>
         </div>
       </div>
     </div>

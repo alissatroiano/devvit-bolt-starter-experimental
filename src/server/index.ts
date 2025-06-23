@@ -3,21 +3,16 @@ import { createServer, getContext, getServerPort } from '@devvit/server';
 import {
   JoinGameResponse,
   GameStateResponse,
-  ActionResponse,
   StartGameResponse,
-  VoteResponse,
-  CompleteTaskResponse,
+  FindImpostorResponse,
 } from '../shared/types/game';
 import {
   createGame,
   getGame,
   joinGame,
   startGame,
-  completeTask,
-  callEmergencyMeeting,
-  eliminatePlayer,
-  castVote,
-  updateGamePhase,
+  findImpostor,
+  updateGameTimer,
 } from './core/game';
 import { getRedis } from '@devvit/redis';
 
@@ -74,7 +69,7 @@ router.post<any, JoinGameResponse, { username: string }>(
         if (!joinResult) {
           res.status(400).json({ 
             status: 'error', 
-            message: 'Cannot join game (full, in progress, or other issue)' 
+            message: 'Cannot join game (full or other issue)' 
           });
           return;
         }
@@ -165,86 +160,11 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
   }
 });
 
-// Complete task (crewmates only)
-router.post<any, CompleteTaskResponse>('/api/complete-task', async (req, res): Promise<void> => {
-  const { postId, userId } = getContext();
-  const redis = getRedis();
-
-  if (!postId) {
-    res.status(400).json({ status: 'error', message: 'postId is required' });
-    return;
-  }
-  if (!userId) {
-    res.status(400).json({ status: 'error', message: 'Must be logged in' });
-    return;
-  }
-
-  try {
-    const result = await completeTask({ redis, postId, playerId: userId });
-    
-    if (!result.gameState) {
-      res.status(404).json({ status: 'error', message: 'Game not found' });
-      return;
-    }
-
-    res.json({
-      status: 'success',
-      gameState: result.gameState,
-      taskCompleted: result.taskCompleted,
-    });
-  } catch (error) {
-    console.error('Error completing task:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
-    });
-  }
-});
-
-// Call emergency meeting
-router.post<any, ActionResponse>('/api/emergency-meeting', async (req, res): Promise<void> => {
-  const { postId, userId } = getContext();
-  const redis = getRedis();
-
-  if (!postId) {
-    res.status(400).json({ status: 'error', message: 'postId is required' });
-    return;
-  }
-  if (!userId) {
-    res.status(400).json({ status: 'error', message: 'Must be logged in' });
-    return;
-  }
-
-  try {
-    const gameState = await callEmergencyMeeting({ redis, postId, playerId: userId });
-    
-    if (!gameState) {
-      res.status(400).json({ 
-        status: 'error', 
-        message: 'Cannot call emergency meeting' 
-      });
-      return;
-    }
-
-    res.json({
-      status: 'success',
-      gameState,
-      message: 'Emergency meeting called!',
-    });
-  } catch (error) {
-    console.error('Error calling emergency meeting:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
-    });
-  }
-});
-
-// Eliminate player (impostors only)
-router.post<any, ActionResponse, { targetId: string }>(
-  '/api/eliminate',
+// Find impostor
+router.post<any, FindImpostorResponse, { x: number; y: number }>(
+  '/api/find-impostor',
   async (req, res): Promise<void> => {
-    const { targetId } = req.body;
+    const { x, y } = req.body;
     const { postId, userId } = getContext();
     const redis = getRedis();
 
@@ -256,34 +176,28 @@ router.post<any, ActionResponse, { targetId: string }>(
       res.status(400).json({ status: 'error', message: 'Must be logged in' });
       return;
     }
-    if (!targetId) {
-      res.status(400).json({ status: 'error', message: 'Target ID is required' });
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
       return;
     }
 
     try {
-      const gameState = await eliminatePlayer({ 
-        redis, 
-        postId, 
-        targetId, 
-        impostorId: userId 
-      });
+      const result = await findImpostor({ redis, postId, playerId: userId, x, y });
       
-      if (!gameState) {
-        res.status(400).json({ 
-          status: 'error', 
-          message: 'Cannot eliminate player' 
-        });
+      if (!result.gameState) {
+        res.status(404).json({ status: 'error', message: 'Game not found' });
         return;
       }
 
       res.json({
         status: 'success',
-        gameState,
-        message: 'Player eliminated!',
+        gameState: result.gameState,
+        found: result.found,
+        impostor: result.impostor,
+        score: result.score,
       });
     } catch (error) {
-      console.error('Error eliminating player:', error);
+      console.error('Error finding impostor:', error);
       res.status(500).json({ 
         status: 'error', 
         message: error instanceof Error ? error.message : 'Unknown error' 
@@ -292,55 +206,8 @@ router.post<any, ActionResponse, { targetId: string }>(
   }
 );
 
-// Cast vote
-router.post<any, VoteResponse, { targetId?: string }>(
-  '/api/vote',
-  async (req, res): Promise<void> => {
-    const { targetId } = req.body;
-    const { postId, userId } = getContext();
-    const redis = getRedis();
-
-    if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' });
-      return;
-    }
-    if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' });
-      return;
-    }
-
-    try {
-      const gameState = await castVote({ 
-        redis, 
-        postId, 
-        voterId: userId, 
-        targetId 
-      });
-      
-      if (!gameState) {
-        res.status(400).json({ 
-          status: 'error', 
-          message: 'Cannot cast vote' 
-        });
-        return;
-      }
-
-      res.json({
-        status: 'success',
-        gameState,
-      });
-    } catch (error) {
-      console.error('Error casting vote:', error);
-      res.status(500).json({ 
-        status: 'error', 
-        message: error instanceof Error ? error.message : 'Unknown error' 
-      });
-    }
-  }
-);
-
-// Update game phase (for timer)
-router.post<any, GameStateResponse>('/api/update-phase', async (req, res): Promise<void> => {
+// Update game timer
+router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
   const { postId } = getContext();
   const redis = getRedis();
 
@@ -350,7 +217,7 @@ router.post<any, GameStateResponse>('/api/update-phase', async (req, res): Promi
   }
 
   try {
-    const gameState = await updateGamePhase({ redis, postId });
+    const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
       res.status(404).json({ status: 'error', message: 'Game not found' });
@@ -362,7 +229,7 @@ router.post<any, GameStateResponse>('/api/update-phase', async (req, res): Promi
       gameState,
     });
   } catch (error) {
-    console.error('Error updating game phase:', error);
+    console.error('Error updating timer:', error);
     res.status(500).json({ 
       status: 'error', 
       message: error instanceof Error ? error.message : 'Unknown error' 

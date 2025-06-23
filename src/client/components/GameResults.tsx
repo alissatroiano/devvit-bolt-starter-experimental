@@ -12,165 +12,146 @@ export const GameResults: React.FC<GameResultsProps> = ({
   currentPlayer,
   onPlayAgain,
 }) => {
-  const players = Object.values(gameState.players);
-  const impostors = players.filter(p => p.role === 'impostor');
-  const crewmates = players.filter(p => p.role === 'crewmate');
-  const winner = gameState.winner;
-  
-  const isWinner = currentPlayer && (
-    (winner === 'crewmates' && currentPlayer.role === 'crewmate') ||
-    (winner === 'impostors' && currentPlayer.role === 'impostor')
-  );
+  const winner = gameState.winner ? gameState.players[gameState.winner] : null;
+  const isWinner = currentPlayer && gameState.winner === currentPlayer.id;
+  const playerRank = gameState.leaderboard.findIndex(p => p.playerId === currentPlayer?.id) + 1;
+
+  const formatTime = (ms?: number) => {
+    if (!ms || !gameState.gameStartTime) return 'N/A';
+    const seconds = Math.floor((ms - gameState.gameStartTime) / 1000);
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div className="min-h-screen p-4 flex items-center justify-center">
+    <div className="min-h-screen p-4 flex items-center justify-center bg-gray-900">
       <div className="max-w-4xl w-full bg-gray-800 rounded-lg p-8 shadow-2xl">
         {/* Game Over Header */}
         <div className="text-center mb-8">
           <h1 className="text-5xl font-bold text-white mb-4">Game Over!</h1>
           
-          <div className={`text-3xl font-bold mb-4 ${
-            winner === 'crewmates' ? 'text-cyan-400' : 'text-red-400'
-          }`}>
-            {winner === 'crewmates' ? '🚀 Crewmates Win!' : '🔪 Impostors Win!'}
-          </div>
+          {winner && (
+            <div className="text-3xl font-bold mb-4 text-yellow-400">
+              🏆 {winner.username} Wins!
+            </div>
+          )}
           
           {currentPlayer && (
-            <div className={`text-xl ${isWinner ? 'text-green-400' : 'text-red-400'}`}>
-              {isWinner ? '🎉 You Won!' : '💀 You Lost!'}
+            <div className={`text-xl ${isWinner ? 'text-green-400' : 'text-blue-400'}`}>
+              {isWinner ? '🎉 Congratulations! You won!' : `You finished in ${playerRank}${playerRank === 1 ? 'st' : playerRank === 2 ? 'nd' : playerRank === 3 ? 'rd' : 'th'} place!`}
             </div>
           )}
         </div>
 
-        {/* Win Condition */}
-        <div className="bg-gray-700 rounded-lg p-6 mb-8 text-center">
-          <h2 className="text-xl font-semibold text-white mb-3">How the game ended:</h2>
-          <p className="text-gray-300">
-            {winner === 'crewmates' 
-              ? '✅ All tasks were completed or all impostors were eliminated!'
-              : '⚡ Impostors eliminated enough crewmates to take control!'
-            }
-          </p>
-        </div>
+        {/* Player Stats */}
+        {currentPlayer && (
+          <div className="bg-gray-700 rounded-lg p-6 mb-8">
+            <h2 className="text-xl font-semibold text-white mb-4">Your Performance</h2>
+            <div className="grid gap-4 md:grid-cols-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-400">{currentPlayer.score}</div>
+                <div className="text-sm text-gray-400">Final Score</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-400">{currentPlayer.foundImpostors.length}</div>
+                <div className="text-sm text-gray-400">Impostors Found</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-400">#{playerRank}</div>
+                <div className="text-sm text-gray-400">Final Rank</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-400">
+                  {formatTime(currentPlayer.timeCompleted)}
+                </div>
+                <div className="text-sm text-gray-400">Completion Time</div>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* Player Results */}
-        <div className="grid gap-6 md:grid-cols-2 mb-8">
-          {/* Crewmates */}
+        {/* Final Leaderboard */}
+        <div className="bg-gray-700 rounded-lg p-6 mb-8">
+          <h2 className="text-xl font-semibold text-white mb-4">Final Leaderboard</h2>
           <div className="space-y-3">
-            <h2 className="text-xl font-semibold text-cyan-400 mb-4">
-              🚀 Crewmates ({crewmates.length})
-            </h2>
-            {crewmates.map((player) => (
+            {gameState.leaderboard.map((entry, index) => (
               <div
-                key={player.id}
-                className={`p-4 rounded-lg border-2 ${
-                  player.status === 'alive'
-                    ? 'bg-cyan-600 bg-opacity-20 border-cyan-500'
-                    : 'bg-gray-700 border-gray-600'
+                key={entry.playerId}
+                className={`flex items-center justify-between p-4 rounded-lg ${
+                  entry.playerId === currentPlayer?.id
+                    ? 'bg-blue-600 bg-opacity-30 border border-blue-500'
+                    : 'bg-gray-600'
                 } ${
-                  player.id === currentPlayer?.id ? 'ring-2 ring-blue-400' : ''
+                  index < 3 ? 'ring-2 ring-yellow-400 ring-opacity-50' : ''
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
-                      {player.status === 'alive' ? '👤' : '💀'}
-                    </div>
-                    <div>
-                      <div className="font-medium text-white">{player.username}</div>
-                      {player.id === currentPlayer?.id && (
-                        <div className="text-sm text-gray-400">(You)</div>
-                      )}
-                    </div>
+                <div className="flex items-center space-x-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                    index === 0 ? 'bg-yellow-500' : 
+                    index === 1 ? 'bg-gray-400' : 
+                    index === 2 ? 'bg-orange-600' : 'bg-gray-500'
+                  }`}>
+                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                   </div>
-                  
-                  <div className="text-right text-sm">
-                    <div className={player.status === 'alive' ? 'text-green-400' : 'text-red-400'}>
-                      {player.status === 'alive' ? 'Survived' : 'Eliminated'}
-                    </div>
-                    <div className="text-gray-400">
-                      Tasks: {player.tasksCompleted}/{player.totalTasks}
-                    </div>
+                  <div>
+                    <div className="font-medium text-white">{entry.username}</div>
+                    {entry.playerId === currentPlayer?.id && (
+                      <div className="text-sm text-blue-400">(You)</div>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Impostors */}
-          <div className="space-y-3">
-            <h2 className="text-xl font-semibold text-red-400 mb-4">
-              🔪 Impostors ({impostors.length})
-            </h2>
-            {impostors.map((player) => (
-              <div
-                key={player.id}
-                className={`p-4 rounded-lg border-2 ${
-                  player.status === 'alive'
-                    ? 'bg-red-600 bg-opacity-20 border-red-500'
-                    : 'bg-gray-700 border-gray-600'
-                } ${
-                  player.id === currentPlayer?.id ? 'ring-2 ring-blue-400' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">
-                      {player.status === 'alive' ? '🔪' : '💀'}
-                    </div>
-                    <div>
-                      <div className="font-medium text-white">{player.username}</div>
-                      {player.id === currentPlayer?.id && (
-                        <div className="text-sm text-gray-400">(You)</div>
-                      )}
-                    </div>
+                
+                <div className="text-right">
+                  <div className="text-xl font-bold text-white">{entry.score} pts</div>
+                  <div className="text-sm text-gray-400">
+                    {gameState.players[entry.playerId]?.foundImpostors.length || 0}/{gameState.impostors.length} found
                   </div>
-                  
-                  <div className="text-right text-sm">
-                    <div className={player.status === 'alive' ? 'text-green-400' : 'text-red-400'}>
-                      {player.status === 'alive' ? 'Survived' : 'Caught'}
+                  {entry.timeCompleted && (
+                    <div className="text-sm text-gray-400">
+                      {formatTime(entry.timeCompleted)}
                     </div>
-                    <div className="text-gray-400">Impostor</div>
-                  </div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Game Stats */}
+        {/* Game Statistics */}
         <div className="bg-gray-700 rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold text-white mb-4">Game Statistics</h2>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-400">{players.length}</div>
+              <div className="text-2xl font-bold text-blue-400">{Object.keys(gameState.players).length}</div>
               <div className="text-sm text-gray-400">Total Players</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-cyan-400">{crewmates.length}</div>
-              <div className="text-sm text-gray-400">Crewmates</div>
+              <div className="text-2xl font-bold text-red-400">{gameState.impostors.length}</div>
+              <div className="text-sm text-gray-400">Total Impostors</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-red-400">{impostors.length}</div>
-              <div className="text-sm text-gray-400">Impostors</div>
+              <div className="text-2xl font-bold text-green-400">
+                {gameState.impostors.filter(i => i.found).length}
+              </div>
+              <div className="text-sm text-gray-400">Found</div>
             </div>
-          </div>
-          
-          {gameState.gameStartTime && (
-            <div className="mt-4 text-center">
-              <div className="text-xl font-bold text-yellow-400">
-                {Math.floor((Date.now() - gameState.gameStartTime) / 60000)}m {Math.floor(((Date.now() - gameState.gameStartTime) % 60000) / 1000)}s
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-400">
+                {gameState.gameStartTime && gameState.gameEndTime 
+                  ? Math.floor((gameState.gameEndTime - gameState.gameStartTime) / 1000)
+                  : 0}s
               </div>
               <div className="text-sm text-gray-400">Game Duration</div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Play Again Button */}
         <div className="text-center">
           <button
             onClick={onPlayAgain}
-            className="py-4 px-8 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-lg transition-colors"
+            className="py-4 px-8 bg-red-600 hover:bg-red-700 rounded-lg font-semibold text-lg transition-colors"
           >
             🔄 Play Again
           </button>
