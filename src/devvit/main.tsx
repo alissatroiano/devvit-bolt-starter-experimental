@@ -1,14 +1,11 @@
-import { Devvit } from '@devvit/public-api';
+import { Devvit, useState, useWebView } from '@devvit/public-api';
 
 // Side effect import to bundle the server. The /index is required for server splitting.
 import '../server/index';
-import { defineConfig } from '@devvit/server';
 
-defineConfig({
-  name: '[Bolt] Reddit Impostors',
-  entry: 'index.html',
-  height: 'tall',
-  menu: { enable: false },
+Devvit.configure({
+  redditAPI: true,
+  redis: true,
 });
 
 export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Loading...' }) => {
@@ -32,9 +29,62 @@ export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Load
   );
 };
 
+// Add a custom post type to Devvit
+Devvit.addCustomPostType({
+  name: 'Reddit Impostors Game',
+  height: 'tall',
+  render: (context) => {
+    // Load username with `useAsync` hook
+    const [username] = useState(async () => {
+      return (await context.reddit.getCurrentUsername()) ?? 'anon';
+    });
+
+    const webView = useWebView({
+      // URL of your web view content
+      url: 'index.html',
+
+      // Handle messages sent from the web view (if needed)
+      async onMessage(message, webView) {
+        // Handle any messages from the webview if needed
+        console.log('Message from webview:', message);
+      },
+      onUnmount() {
+        context.ui.showToast('Game closed!');
+      },
+    });
+
+    // Render the custom post type
+    return (
+      <vstack grow padding="small">
+        <vstack grow alignment="middle center">
+          <text size="xlarge" weight="bold">
+            Reddit Impostors
+          </text>
+          <spacer />
+          <vstack alignment="start middle">
+            <text size="medium">Welcome, {username ?? 'Player'}!</text>
+            <spacer size="small" />
+            <text size="small" color="secondary">
+              🚀 Crewmates: Complete tasks to win
+            </text>
+            <text size="small" color="secondary">
+              🔪 Impostors: Eliminate crewmates without getting caught
+            </text>
+            <text size="small" color="secondary">
+              🗳️ Vote out suspicious players in discussions
+            </text>
+          </vstack>
+          <spacer />
+          <button onPress={() => webView.mount()}>Launch Game</button>
+        </vstack>
+      </vstack>
+    );
+  },
+});
+
 // Create game posts via menu
 Devvit.addMenuItem({
-  label: '[Reddit Impostors]: New Game',
+  label: '[Reddit Impostors] New Game',
   location: 'subreddit',
   forUserType: 'moderator',
   onPress: async (_event, context) => {
