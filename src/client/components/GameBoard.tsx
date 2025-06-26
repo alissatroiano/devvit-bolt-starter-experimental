@@ -62,57 +62,82 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   const totalCount = gameState.impostors.length;
   const timeLeft = gameState.timeLeft || 0;
 
+  // Generate crowd of people with some being impostors
+  const generateCrowd = () => {
+    const crowd = [];
+    for (let i = 0; i < 150; i++) {
+      const x = Math.random() * 95;
+      const y = Math.random() * 95;
+      const isImpostor = gameState.impostors.some(imp => 
+        !imp.found && 
+        Math.abs(imp.x - x) < 3 && 
+        Math.abs(imp.y - y) < 3
+      );
+      
+      crowd.push({
+        id: i,
+        x,
+        y,
+        emoji: isImpostor ? '👽' : '👤',
+        isImpostor,
+      });
+    }
+    return crowd;
+  };
+
+  const crowd = generateCrowd();
+
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* Header */}
-      <div className="bg-gray-800 p-4 shadow-lg">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-6">
-            <h1 className="text-2xl font-bold text-red-400">Find the Impostors!</h1>
-            <div className="flex items-center space-x-4 text-lg">
-              <div className="bg-blue-600 px-3 py-1 rounded">
-                Found: {foundCount}/{totalCount}
-              </div>
-              <div className="bg-green-600 px-3 py-1 rounded">
-                Score: {currentPlayer?.score || 0}
-              </div>
-              <div className={`px-3 py-1 rounded ${timeLeft <= 30 ? 'bg-red-600' : 'bg-yellow-600'}`}>
-                Time: {formatTime(timeLeft)}
-              </div>
+    <div className="h-screen bg-[#1a1a2e] text-white flex flex-col">
+      {/* Top Header */}
+      <div className="bg-[#16213e] p-4 flex items-center justify-between border-b border-gray-700">
+        <div className="flex items-center space-x-6">
+          <h1 className="text-xl font-bold text-[#0ea5e9]">FIND THE IMPOSTORS</h1>
+          <div className="flex items-center space-x-4">
+            <div className="bg-[#0ea5e9] px-3 py-1 rounded text-sm font-medium">
+              {foundCount}/{totalCount}
+            </div>
+            <div className="text-[#0ea5e9] font-medium">
+              Score: {currentPlayer?.score || 0}
             </div>
           </div>
-          
-          <div className="text-right">
-            <div className="text-sm text-gray-300">Playing as</div>
-            <div className="font-semibold">{currentPlayer?.username}</div>
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className={`px-3 py-1 rounded font-medium ${
+            timeLeft <= 30 ? 'bg-red-600 text-white' : 'bg-[#0ea5e9] text-white'
+          }`}>
+            {formatTime(timeLeft)}
+          </div>
+          <div className="text-sm text-gray-300">
+            {currentPlayer?.username}
           </div>
         </div>
       </div>
 
-      {/* Game Area */}
-      <div className="relative max-w-6xl mx-auto p-4">
+      {/* Main Game Canvas */}
+      <div className="flex-1 relative">
         <div
           ref={gameAreaRef}
-          className="relative w-full h-[600px] bg-gradient-to-b from-blue-400 to-green-400 rounded-lg overflow-hidden cursor-crosshair"
+          className="w-full h-full bg-gradient-to-b from-[#2a4a6b] to-[#1e3a5f] cursor-crosshair relative overflow-hidden"
           onClick={handleClick}
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='crowd' patternUnits='userSpaceOnUse' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='8' fill='%23333' opacity='0.1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100' height='100' fill='url(%23crowd)'/%3E%3C/svg%3E")`,
-          }}
         >
-          {/* Crowd simulation with CSS */}
-          <div className="absolute inset-0 opacity-30">
-            {Array.from({ length: 200 }, (_, i) => (
-              <div
-                key={i}
-                className="absolute w-3 h-3 bg-gray-800 rounded-full"
-                style={{
-                  left: `${Math.random() * 95}%`,
-                  top: `${Math.random() * 95}%`,
-                  transform: `scale(${0.5 + Math.random() * 0.5})`,
-                }}
-              />
-            ))}
-          </div>
+          {/* Crowd */}
+          {crowd.map((person) => (
+            <div
+              key={person.id}
+              className={`absolute text-lg select-none pointer-events-none ${
+                person.isImpostor ? 'text-red-400' : 'text-gray-400'
+              }`}
+              style={{
+                left: `${person.x}%`,
+                top: `${person.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
+            >
+              {person.emoji}
+            </div>
+          ))}
 
           {/* Found impostors markers */}
           {gameState.impostors
@@ -120,22 +145,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             .map((impostor) => (
               <div
                 key={impostor.id}
-                className="absolute border-4 border-green-500 bg-green-500 bg-opacity-20 rounded-lg flex items-center justify-center"
+                className="absolute border-2 border-green-400 bg-green-400 bg-opacity-20 rounded-lg flex items-center justify-center"
                 style={{
                   left: `${impostor.x}%`,
                   top: `${impostor.y}%`,
                   width: `${impostor.width}%`,
                   height: `${impostor.height}%`,
+                  transform: 'translate(-50%, -50%)',
                 }}
               >
-                <div className="text-green-500 font-bold text-xl">✓</div>
+                <div className="text-green-400 font-bold text-xl">✓</div>
               </div>
             ))}
 
           {/* Click feedback */}
           {lastClick && (
             <div
-              className="absolute w-8 h-8 border-4 border-red-500 rounded-full animate-ping"
+              className="absolute w-8 h-8 border-2 border-[#0ea5e9] rounded-full animate-ping"
               style={{
                 left: lastClick.x - 16,
                 top: lastClick.y - 16,
@@ -158,52 +184,63 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               </div>
             </div>
           )}
-
-          {/* Instructions overlay */}
-          <div className="absolute top-4 left-4 bg-black bg-opacity-50 text-white p-3 rounded-lg max-w-xs">
-            <h3 className="font-bold mb-2">Instructions:</h3>
-            <ul className="text-sm space-y-1">
-              <li>🔍 Click on suspicious figures in the crowd</li>
-              <li>🟢 Easy impostors: 10 points</li>
-              <li>🟡 Medium impostors: 25 points</li>
-              <li>🔴 Hard impostors: 50 points</li>
-              <li>⚡ Speed bonus for quick finds!</li>
-            </ul>
-          </div>
         </div>
+      </div>
 
-        {/* Leaderboard */}
-        <div className="mt-6 bg-gray-800 rounded-lg p-4">
-          <h2 className="text-xl font-bold mb-4">Live Leaderboard</h2>
-          <div className="grid gap-2">
-            {Object.values(gameState.players)
-              .sort((a, b) => b.score - a.score)
-              .map((player, index) => (
-                <div
-                  key={player.id}
-                  className={`flex items-center justify-between p-2 rounded ${
-                    player.id === currentPlayer?.id ? 'bg-blue-600 bg-opacity-30' : 'bg-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${
-                      index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-gray-600'
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <span className="font-medium">{player.username}</span>
-                    {player.id === currentPlayer?.id && (
-                      <span className="text-blue-400 text-sm">(You)</span>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold">{player.score} pts</div>
-                    <div className="text-sm text-gray-400">
-                      {player.foundImpostors.length}/{totalCount} found
-                    </div>
-                  </div>
-                </div>
-              ))}
+      {/* Bottom Panel - Who to Look For */}
+      <div className="bg-[#16213e] border-t border-gray-700 p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-[#0ea5e9]">WHO TO LOOK FOR</h2>
+            <div className="text-sm text-gray-400">
+              Click on suspicious figures in the crowd
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+            {/* Easy Impostors */}
+            <div className="bg-[#1a1a2e] rounded-lg p-3 border border-green-600">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-green-400 font-medium">EASY</span>
+                <span className="text-green-400 text-2xl">👽</span>
+              </div>
+              <div className="text-xs text-gray-300 mb-1">Large, obvious figures</div>
+              <div className="text-green-400 font-bold">+10 points</div>
+            </div>
+
+            {/* Medium Impostors */}
+            <div className="bg-[#1a1a2e] rounded-lg p-3 border border-yellow-600">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-yellow-400 font-medium">MEDIUM</span>
+                <span className="text-yellow-400 text-2xl">👽</span>
+              </div>
+              <div className="text-xs text-gray-300 mb-1">Smaller, partially hidden</div>
+              <div className="text-yellow-400 font-bold">+25 points</div>
+            </div>
+
+            {/* Hard Impostors */}
+            <div className="bg-[#1a1a2e] rounded-lg p-3 border border-red-600">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-red-400 font-medium">HARD</span>
+                <span className="text-red-400 text-2xl">👽</span>
+              </div>
+              <div className="text-xs text-gray-300 mb-1">Very small, well hidden</div>
+              <div className="text-red-400 font-bold">+50 points</div>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-400">Progress</span>
+              <span className="text-sm text-[#0ea5e9]">{foundCount}/{totalCount} found</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2">
+              <div 
+                className="bg-[#0ea5e9] h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(foundCount / totalCount) * 100}%` }}
+              />
+            </div>
           </div>
         </div>
       </div>
