@@ -53,29 +53,96 @@ Devvit.addCustomPostType({
       },
     });
 
-    // Render the custom post type
+    // Render the custom post type with Figma-inspired design
     return (
-      <vstack grow padding="small">
-        <vstack grow alignment="middle center">
-          <text size="xlarge" weight="bold">
-            Find the Impostors!
+      <vstack grow padding="medium" backgroundColor="#1a1a2e">
+        {/* Header Section */}
+        <vstack alignment="center middle" padding="large">
+          <text size="xxlarge" weight="bold" color="#ffffff">
+            FIND THE IMPOSTORS
           </text>
-          <spacer />
-          <vstack alignment="start middle">
-            <text size="medium">Welcome, {username ?? 'Player'}!</text>
-            <spacer size="small" />
-            <text size="small" color="secondary">
-              🔍 Find all the hidden impostors in the crowd
-            </text>
-            <text size="small" color="secondary">
-              ⏱️ Race against time and other players
-            </text>
-            <text size="small" color="secondary">
-              🏆 Score points based on difficulty and speed
-            </text>
+          <spacer size="small" />
+          <text size="medium" color="#16d9e3" weight="bold">
+            Hidden Object Challenge
+          </text>
+        </vstack>
+
+        {/* Game Preview Image/Illustration */}
+        <vstack alignment="center middle" padding="medium">
+          <hstack alignment="center middle" backgroundColor="#0f3460" cornerRadius="large" padding="large" width="90%">
+            {/* Simulated crowd with some highlighted figures */}
+            <vstack alignment="center middle" gap="small">
+              <hstack gap="small">
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#ff6b6b">👽</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+              </hstack>
+              <hstack gap="small">
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#ff6b6b">👽</text>
+                <text color="#666">👤</text>
+              </hstack>
+              <hstack gap="small">
+                <text color="#ff6b6b">👽</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+              </hstack>
+            </vstack>
+          </hstack>
+        </vstack>
+
+        {/* Game Stats */}
+        <hstack alignment="center middle" gap="large" padding="medium">
+          <vstack alignment="center middle" backgroundColor="#2d4a22" cornerRadius="medium" padding="medium" minWidth="80px">
+            <text size="large" weight="bold" color="#4ade80">12</text>
+            <text size="small" color="#86efac">IMPOSTORS</text>
           </vstack>
-          <spacer />
-          <button onPress={() => webView.mount()}>Launch Game</button>
+          <vstack alignment="center middle" backgroundColor="#7c2d12" cornerRadius="medium" padding="medium" minWidth="80px">
+            <text size="large" weight="bold" color="#fb923c">5:00</text>
+            <text size="small" color="#fdba74">TIME LIMIT</text>
+          </vstack>
+          <vstack alignment="center middle" backgroundColor="#1e3a8a" cornerRadius="medium" padding="medium" minWidth="80px">
+            <text size="large" weight="bold" color="#60a5fa">∞</text>
+            <text size="small" color="#93c5fd">PLAYERS</text>
+          </vstack>
+        </hstack>
+
+        {/* Instructions */}
+        <vstack alignment="start" padding="medium" backgroundColor="#2a2a3e" cornerRadius="medium" gap="small">
+          <text size="medium" weight="bold" color="#ffffff">How to Play:</text>
+          <hstack gap="small">
+            <text color="#16d9e3">🔍</text>
+            <text size="small" color="#cccccc">Scan the crowd to find hidden impostors</text>
+          </hstack>
+          <hstack gap="small">
+            <text color="#16d9e3">⚡</text>
+            <text size="small" color="#cccccc">Click quickly for speed bonuses</text>
+          </hstack>
+          <hstack gap="small">
+            <text color="#16d9e3">🏆</text>
+            <text size="small" color="#cccccc">Compete with other players for high score</text>
+          </hstack>
+        </vstack>
+
+        {/* Play Button */}
+        <vstack alignment="center middle" padding="large">
+          <button 
+            onPress={() => webView.mount()}
+            appearance="primary"
+            size="large"
+          >
+            🚀 START HUNTING
+          </button>
+          <spacer size="small" />
+          <text size="small" color="#888888">
+            Playing as {username ?? 'Player'}
+          </text>
         </vstack>
       </vstack>
     );
@@ -94,7 +161,7 @@ Devvit.addMenuItem({
     try {
       const subreddit = await reddit.getCurrentSubreddit();
       post = await reddit.submitPost({
-        title: 'Find the Impostors - Hidden Object Game',
+        title: 'Find the Impostors - Hidden Object Challenge',
         subredditName: subreddit.name,
         preview: <Preview text="Click to start the hidden object challenge!" />,
       });
