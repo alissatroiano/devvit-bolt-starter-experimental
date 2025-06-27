@@ -53,139 +53,101 @@ Devvit.addCustomPostType({
       },
     });
 
-    // Render the custom post type with Figma-inspired design
+    // Render the custom post type matching the Figma design
     return (
-      <vstack grow padding="medium" backgroundColor="#1a1a2e">
-        {/* Header Section */}
-        <vstack alignment="center middle" padding="large">
-          <text size="xxlarge" weight="bold" color="#0ea5e9">
-            FIND THE IMPOSTORS
-          </text>
-          <spacer size="small" />
-          <text size="medium" color="#16d9e3" weight="bold">
-            Hidden Object Challenge
-          </text>
-          <spacer size="small" />
-          <text size="small" color="#888888" alignment="center">
-            Scan the crowd and click on suspicious alien figures
-          </text>
-        </vstack>
-
-        {/* Game Preview Visualization */}
-        <vstack alignment="center middle" padding="medium">
-          <hstack alignment="center middle" backgroundColor="#0f3460" cornerRadius="large" padding="large" width="90%" height="200px">
-            {/* Simulated crowd scene */}
-            <vstack alignment="center middle" gap="small" width="100%">
+      <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
+        {/* Background with gradient effect */}
+        <vstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e" />
+        
+        {/* Main content */}
+        <hstack width={'100%'} height={'100%'} alignment="center middle" gap="large" padding="large">
+          {/* Left side - Text content */}
+          <vstack alignment="start middle" gap="medium" grow>
+            {/* Title with red accent */}
+            <vstack alignment="start" gap="small">
+              <text size="xxlarge" weight="bold" color="#ff4444">
+                Reddimposters
+              </text>
               <hstack gap="small" alignment="center">
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#ff6b6b" size="large">👽</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
+                <text size="large" color="#ffffff">find the</text>
+                <text size="large" weight="bold" color="#ffd700">impostors</text>
               </hstack>
               <hstack gap="small" alignment="center">
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#ff6b6b" size="large">👽</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-              </hstack>
-              <hstack gap="small" alignment="center">
-                <text color="#ff6b6b" size="large">👽</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-              </hstack>
-              <hstack gap="small" alignment="center">
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
-                <text color="#ff6b6b" size="large">👽</text>
-                <text color="#666">👤</text>
-                <text color="#666">👤</text>
+                <text size="large" color="#ffffff">among us on</text>
+                <text size="large" weight="bold" color="#ff4444">reddit</text>
               </hstack>
             </vstack>
-          </hstack>
-        </vstack>
 
-        {/* Game Stats */}
-        <hstack alignment="center middle" gap="large" padding="medium">
-          <vstack alignment="center middle" backgroundColor="#2d4a22" cornerRadius="medium" padding="medium" minWidth="80px">
-            <text size="large" weight="bold" color="#4ade80">12</text>
-            <text size="small" color="#86efac">IMPOSTORS</text>
+            <spacer size="large" />
+
+            {/* Action buttons */}
+            <vstack gap="medium" alignment="start">
+              <button 
+                onPress={() => webView.mount()}
+                appearance="primary"
+                size="large"
+                backgroundColor="#ffd700"
+                textColor="#000000"
+              >
+                PLAY
+              </button>
+              
+              <button 
+                onPress={() => {
+                  context.ui.showToast('Game Rules: Find all hidden alien impostors in the crowd! Easy: +10pts, Medium: +25pts, Hard: +50pts. You have 5 minutes!');
+                }}
+                appearance="secondary"
+                size="medium"
+                backgroundColor="#333333"
+                textColor="#ffffff"
+              >
+                FAQ
+              </button>
+            </vstack>
+
+            <spacer size="small" />
+            
+            {/* Player info */}
+            <text size="small" color="#888888">
+              Playing as {username ?? 'Player'}
+            </text>
           </vstack>
-          <vstack alignment="center middle" backgroundColor="#7c2d12" cornerRadius="medium" padding="medium" minWidth="80px">
-            <text size="large" weight="bold" color="#fb923c">5:00</text>
-            <text size="small" color="#fdba74">TIME LIMIT</text>
-          </vstack>
-          <vstack alignment="center middle" backgroundColor="#1e3a8a" cornerRadius="medium" padding="medium" minWidth="80px">
-            <text size="large" weight="bold" color="#60a5fa">∞</text>
-            <text size="small" color="#93c5fd">PLAYERS</text>
+
+          {/* Right side - Character illustration */}
+          <vstack alignment="center middle" width="200px" height="300px">
+            {/* Large alien character */}
+            <vstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="150px" height="200px">
+              <text size="xxlarge" color="#000000">👽</text>
+            </vstack>
+            
+            {/* Decorative stars around */}
+            <hstack gap="large" alignment="center" width="100%">
+              <text color="#ff4444" size="large">✦</text>
+              <spacer />
+              <text color="#ffd700" size="large">✦</text>
+            </hstack>
           </vstack>
         </hstack>
 
-        {/* Difficulty Levels */}
-        <vstack alignment="start" padding="medium" backgroundColor="#2a2a3e" cornerRadius="medium" gap="small">
-          <text size="medium" weight="bold" color="#ffffff">Difficulty Levels:</text>
-          <hstack gap="medium" alignment="center">
-            <vstack alignment="center" backgroundColor="#2d4a22" cornerRadius="small" padding="small" minWidth="60px">
-              <text color="#4ade80" size="large">👽</text>
-              <text size="small" color="#4ade80" weight="bold">EASY</text>
-              <text size="small" color="#86efac">+10pts</text>
-            </vstack>
-            <vstack alignment="center" backgroundColor="#7c2d12" cornerRadius="small" padding="small" minWidth="60px">
-              <text color="#fb923c" size="large">👽</text>
-              <text size="small" color="#fb923c" weight="bold">MEDIUM</text>
-              <text size="small" color="#fdba74">+25pts</text>
-            </vstack>
-            <vstack alignment="center" backgroundColor="#7c2d12" cornerRadius="small" padding="small" minWidth="60px">
-              <text color="#ef4444" size="large">👽</text>
-              <text size="small" color="#ef4444" weight="bold">HARD</text>
-              <text size="small" color="#fca5a5">+50pts</text>
-            </vstack>
+        {/* Decorative elements */}
+        <vstack alignment="top start" padding="medium">
+          <text color="#ff4444" size="large">✦</text>
+        </vstack>
+        
+        <vstack alignment="top end" padding="medium">
+          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
+            <text color="#000000" size="small" weight="bold">BOLT</text>
           </hstack>
         </vstack>
 
-        {/* Instructions */}
-        <vstack alignment="start" padding="medium" backgroundColor="#16213e" cornerRadius="medium" gap="small">
-          <text size="medium" weight="bold" color="#0ea5e9">How to Play:</text>
-          <hstack gap="small">
-            <text color="#0ea5e9">🔍</text>
-            <text size="small" color="#cccccc">Scan the crowd to find hidden alien impostors</text>
-          </hstack>
-          <hstack gap="small">
-            <text color="#0ea5e9">⚡</text>
-            <text size="small" color="#cccccc">Click quickly for speed bonuses</text>
-          </hstack>
-          <hstack gap="small">
-            <text color="#0ea5e9">🏆</text>
-            <text size="small" color="#cccccc">Compete with other players for high score</text>
-          </hstack>
+        <vstack alignment="bottom start" padding="medium">
+          <text color="#ffd700" size="large">✦</text>
         </vstack>
 
-        {/* Play Button */}
-        <vstack alignment="center middle" padding="large">
-          <button 
-            onPress={() => webView.mount()}
-            appearance="primary"
-            size="large"
-          >
-            🚀 START HUNTING
-          </button>
-          <spacer size="small" />
-          <text size="small" color="#888888">
-            Playing as {username ?? 'Player'}
-          </text>
+        <vstack alignment="bottom end" padding="medium">
+          <text color="#ff4444" size="large">✦</text>
         </vstack>
-      </vstack>
+      </zstack>
     );
   },
 });
@@ -202,12 +164,12 @@ Devvit.addMenuItem({
     try {
       const subreddit = await reddit.getCurrentSubreddit();
       post = await reddit.submitPost({
-        title: 'Find the Impostors - Hidden Object Challenge',
+        title: 'Reddimposters - Find the Alien Impostors!',
         subredditName: subreddit.name,
-        preview: <Preview text="Click START HUNTING to begin the challenge!" />,
+        preview: <Preview text="Click PLAY to start hunting for alien impostors!" />,
       });
       
-      ui.showToast({ text: 'Created Find the Impostors game!' });
+      ui.showToast({ text: 'Created Reddimposters game!' });
       ui.navigateTo(post.url);
     } catch (error) {
       if (post) {

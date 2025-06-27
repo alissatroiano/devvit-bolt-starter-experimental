@@ -76,6 +76,8 @@ export const Game: React.FC = () => {
       const response = await fetch('/api/game-state');
       
       if (!response.ok) {
+        // Don't throw error for 404s during polling
+        if (response.status === 404) return;
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
@@ -248,7 +250,7 @@ export const Game: React.FC = () => {
       <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
         <div className="text-center">
           <div className="text-white text-xl mb-4">Loading game...</div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0ea5e9] mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd700] mx-auto"></div>
         </div>
       </div>
     );
@@ -262,23 +264,23 @@ export const Game: React.FC = () => {
         <div className="flex items-center justify-center min-h-screen p-4">
           <div className="max-w-md w-full bg-[#16213e] rounded-lg p-8 shadow-2xl border border-gray-700">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-[#0ea5e9] mb-2">FIND THE IMPOSTORS</h1>
-              <p className="text-gray-300">Hidden Object Challenge</p>
+              <h1 className="text-3xl font-bold text-[#ff4444] mb-2">REDDIMPOSTERS</h1>
+              <p className="text-[#ffd700] font-medium">Find the Alien Impostors</p>
             </div>
             
             <div className="space-y-4 mb-6">
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
-                <h3 className="text-[#0ea5e9] font-bold mb-2">🎯 Objective</h3>
+                <h3 className="text-[#ffd700] font-bold mb-2">🎯 Objective</h3>
                 <p className="text-sm text-gray-300">Find all 12 alien impostors hidden in the crowd before time runs out!</p>
               </div>
               
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
-                <h3 className="text-[#0ea5e9] font-bold mb-2">⏱️ Time Limit</h3>
+                <h3 className="text-[#ffd700] font-bold mb-2">⏱️ Time Limit</h3>
                 <p className="text-sm text-gray-300">You have 5 minutes to find as many impostors as possible.</p>
               </div>
               
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
-                <h3 className="text-[#0ea5e9] font-bold mb-2">🏆 Scoring</h3>
+                <h3 className="text-[#ffd700] font-bold mb-2">🏆 Scoring</h3>
                 <div className="text-sm text-gray-300 space-y-1">
                   <div>Easy (large): +10 points</div>
                   <div>Medium (small): +25 points</div>
@@ -293,7 +295,7 @@ export const Game: React.FC = () => {
                 const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
                 joinGame(randomUsername);
               }}
-              className="w-full py-3 px-4 bg-[#0ea5e9] hover:bg-blue-600 rounded-lg font-semibold transition-colors text-white"
+              className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 rounded-lg font-semibold transition-colors text-black"
             >
               🚀 START HUNTING
             </button>
@@ -317,7 +319,7 @@ export const Game: React.FC = () => {
             <div className="text-white text-xl mb-4">Failed to load game</div>
             <button 
               onClick={() => window.location.reload()}
-              className="bg-[#0ea5e9] text-white px-4 py-2 rounded hover:bg-blue-600"
+              className="bg-[#ffd700] text-black px-4 py-2 rounded hover:bg-yellow-500"
             >
               Retry
             </button>
