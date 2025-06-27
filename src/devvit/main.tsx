@@ -58,38 +58,57 @@ Devvit.addCustomPostType({
       <vstack grow padding="medium" backgroundColor="#1a1a2e">
         {/* Header Section */}
         <vstack alignment="center middle" padding="large">
-          <text size="xxlarge" weight="bold" color="#ffffff">
+          <text size="xxlarge" weight="bold" color="#0ea5e9">
             FIND THE IMPOSTORS
           </text>
           <spacer size="small" />
           <text size="medium" color="#16d9e3" weight="bold">
             Hidden Object Challenge
           </text>
+          <spacer size="small" />
+          <text size="small" color="#888888" alignment="center">
+            Scan the crowd and click on suspicious alien figures
+          </text>
         </vstack>
 
-        {/* Game Preview Image/Illustration */}
+        {/* Game Preview Visualization */}
         <vstack alignment="center middle" padding="medium">
-          <hstack alignment="center middle" backgroundColor="#0f3460" cornerRadius="large" padding="large" width="90%">
-            {/* Simulated crowd with some highlighted figures */}
-            <vstack alignment="center middle" gap="small">
-              <hstack gap="small">
+          <hstack alignment="center middle" backgroundColor="#0f3460" cornerRadius="large" padding="large" width="90%" height="200px">
+            {/* Simulated crowd scene */}
+            <vstack alignment="center middle" gap="small" width="100%">
+              <hstack gap="small" alignment="center">
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
-                <text color="#ff6b6b">👽</text>
+                <text color="#ff6b6b" size="large">👽</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+              </hstack>
+              <hstack gap="small" alignment="center">
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#ff6b6b" size="large">👽</text>
+                <text color="#666">👤</text>
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
               </hstack>
-              <hstack gap="small">
+              <hstack gap="small" alignment="center">
+                <text color="#ff6b6b" size="large">👽</text>
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
-                <text color="#ff6b6b">👽</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
                 <text color="#666">👤</text>
               </hstack>
-              <hstack gap="small">
-                <text color="#ff6b6b">👽</text>
+              <hstack gap="small" alignment="center">
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#666">👤</text>
+                <text color="#ff6b6b" size="large">👽</text>
                 <text color="#666">👤</text>
                 <text color="#666">👤</text>
               </hstack>
@@ -113,19 +132,41 @@ Devvit.addCustomPostType({
           </vstack>
         </hstack>
 
-        {/* Instructions */}
+        {/* Difficulty Levels */}
         <vstack alignment="start" padding="medium" backgroundColor="#2a2a3e" cornerRadius="medium" gap="small">
-          <text size="medium" weight="bold" color="#ffffff">How to Play:</text>
+          <text size="medium" weight="bold" color="#ffffff">Difficulty Levels:</text>
+          <hstack gap="medium" alignment="center">
+            <vstack alignment="center" backgroundColor="#2d4a22" cornerRadius="small" padding="small" minWidth="60px">
+              <text color="#4ade80" size="large">👽</text>
+              <text size="small" color="#4ade80" weight="bold">EASY</text>
+              <text size="small" color="#86efac">+10pts</text>
+            </vstack>
+            <vstack alignment="center" backgroundColor="#7c2d12" cornerRadius="small" padding="small" minWidth="60px">
+              <text color="#fb923c" size="large">👽</text>
+              <text size="small" color="#fb923c" weight="bold">MEDIUM</text>
+              <text size="small" color="#fdba74">+25pts</text>
+            </vstack>
+            <vstack alignment="center" backgroundColor="#7c2d12" cornerRadius="small" padding="small" minWidth="60px">
+              <text color="#ef4444" size="large">👽</text>
+              <text size="small" color="#ef4444" weight="bold">HARD</text>
+              <text size="small" color="#fca5a5">+50pts</text>
+            </vstack>
+          </hstack>
+        </vstack>
+
+        {/* Instructions */}
+        <vstack alignment="start" padding="medium" backgroundColor="#16213e" cornerRadius="medium" gap="small">
+          <text size="medium" weight="bold" color="#0ea5e9">How to Play:</text>
           <hstack gap="small">
-            <text color="#16d9e3">🔍</text>
-            <text size="small" color="#cccccc">Scan the crowd to find hidden impostors</text>
+            <text color="#0ea5e9">🔍</text>
+            <text size="small" color="#cccccc">Scan the crowd to find hidden alien impostors</text>
           </hstack>
           <hstack gap="small">
-            <text color="#16d9e3">⚡</text>
+            <text color="#0ea5e9">⚡</text>
             <text size="small" color="#cccccc">Click quickly for speed bonuses</text>
           </hstack>
           <hstack gap="small">
-            <text color="#16d9e3">🏆</text>
+            <text color="#0ea5e9">🏆</text>
             <text size="small" color="#cccccc">Compete with other players for high score</text>
           </hstack>
         </vstack>
@@ -163,7 +204,7 @@ Devvit.addMenuItem({
       post = await reddit.submitPost({
         title: 'Find the Impostors - Hidden Object Challenge',
         subredditName: subreddit.name,
-        preview: <Preview text="Click to start the hidden object challenge!" />,
+        preview: <Preview text="Click START HUNTING to begin the challenge!" />,
       });
       
       ui.showToast({ text: 'Created Find the Impostors game!' });

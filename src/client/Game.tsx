@@ -64,6 +64,7 @@ export const Game: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [showBanner, setShowBanner] = useState(false);
+  const [gameStarted, setGameStarted] = useState(false);
 
   useEffect(() => {
     const hostname = window.location.hostname;
@@ -97,16 +98,13 @@ export const Game: React.FC = () => {
     }
   }, []);
 
-  const autoJoinGame = useCallback(async () => {
+  const joinGame = useCallback(async (username: string) => {
     setLoading(true);
     try {
-      // Generate a random username
-      const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
-      
       const response = await fetch('/api/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: randomUsername }),
+        body: JSON.stringify({ username }),
       });
       
       if (!response.ok) {
@@ -124,6 +122,7 @@ export const Game: React.FC = () => {
         setGameState(result.gameState);
         setCurrentPlayer(result.gameState.players[result.playerId]);
         setError('');
+        setGameStarted(true);
         
         // Auto-start the game if we're the host
         if (result.gameState.host === result.playerId && result.gameState.phase === 'waiting') {
@@ -204,14 +203,14 @@ export const Game: React.FC = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (gameState) {
+    if (gameState && gameStarted) {
       interval = setInterval(fetchGameState, 2000); // Poll every 2 seconds
     }
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [gameState, fetchGameState]);
+  }, [gameState, gameStarted, fetchGameState]);
 
   // Update game timer
   useEffect(() => {
@@ -235,18 +234,14 @@ export const Game: React.FC = () => {
     };
   }, [gameState]);
 
-  // Auto-join game on initial load
+  // Check for existing game on load
   useEffect(() => {
     const init = async () => {
       await fetchGameState();
-      if (!gameState) {
-        await autoJoinGame();
-      } else {
-        setLoading(false);
-      }
+      setLoading(false);
     };
     init();
-  }, []);
+  }, [fetchGameState]);
 
   if (loading) {
     return (
@@ -254,6 +249,61 @@ export const Game: React.FC = () => {
         <div className="text-center">
           <div className="text-white text-xl mb-4">Loading game...</div>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0ea5e9] mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show start screen if no game has been started
+  if (!gameStarted && !gameState) {
+    return (
+      <div className="min-h-screen bg-[#1a1a2e] text-white">
+        {showBanner && <Banner />}
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <div className="max-w-md w-full bg-[#16213e] rounded-lg p-8 shadow-2xl border border-gray-700">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-[#0ea5e9] mb-2">FIND THE IMPOSTORS</h1>
+              <p className="text-gray-300">Hidden Object Challenge</p>
+            </div>
+            
+            <div className="space-y-4 mb-6">
+              <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
+                <h3 className="text-[#0ea5e9] font-bold mb-2">🎯 Objective</h3>
+                <p className="text-sm text-gray-300">Find all 12 alien impostors hidden in the crowd before time runs out!</p>
+              </div>
+              
+              <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
+                <h3 className="text-[#0ea5e9] font-bold mb-2">⏱️ Time Limit</h3>
+                <p className="text-sm text-gray-300">You have 5 minutes to find as many impostors as possible.</p>
+              </div>
+              
+              <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
+                <h3 className="text-[#0ea5e9] font-bold mb-2">🏆 Scoring</h3>
+                <div className="text-sm text-gray-300 space-y-1">
+                  <div>Easy (large): +10 points</div>
+                  <div>Medium (small): +25 points</div>
+                  <div>Hard (tiny): +50 points</div>
+                  <div>+ Speed bonus for quick finds!</div>
+                </div>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => {
+                const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
+                joinGame(randomUsername);
+              }}
+              className="w-full py-3 px-4 bg-[#0ea5e9] hover:bg-blue-600 rounded-lg font-semibold transition-colors text-white"
+            >
+              🚀 START HUNTING
+            </button>
+            
+            {error && (
+              <div className="mt-4 p-3 bg-red-600 bg-opacity-20 border border-red-500 rounded-lg text-red-300 text-sm">
+                {error}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
