@@ -18,32 +18,72 @@ import { getRedis } from '@devvit/redis';
 
 const app = express();
 
-// Middleware for JSON body parsing
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Enhanced middleware for better error handling
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.text());
 
-// Error handling middleware
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// CORS middleware for better compatibility
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+// Enhanced error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Server error:', err);
+  
+  // Send proper JSON error response
   res.status(500).json({ 
     status: 'error', 
-    message: 'Internal server error' 
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
   });
 });
 
 const router = express.Router();
+
+// Health check endpoint
+router.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'success', 
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Join or create game
 router.post<any, JoinGameResponse, { username: string }>(
   '/api/join',
   async (req, res): Promise<void> => {
     try {
+      console.log('Join game request:', req.body);
+      
       const { username } = req.body;
       const context = getContext();
+      
+      if (!context) {
+        console.error('No context available');
+        res.status(500).json({ status: 'error', message: 'Server context not available' });
+        return;
+      }
+      
       const { postId, userId } = context;
-      const redis = getRedis();
-
+      console.log('Context:', { postId, userId });
+      
       if (!postId) {
         res.status(400).json({ status: 'error', message: 'postId is required' });
         return;
@@ -57,9 +97,11 @@ router.post<any, JoinGameResponse, { username: string }>(
         return;
       }
 
+      const redis = getRedis();
       let gameState = await getGame({ redis, postId });
       
       if (!gameState) {
+        console.log('Creating new game');
         // Create new game
         gameState = await createGame({
           redis,
@@ -68,6 +110,7 @@ router.post<any, JoinGameResponse, { username: string }>(
           hostUsername: username,
         });
       } else {
+        console.log('Joining existing game');
         // Join existing game
         const joinResult = await joinGame({
           redis,
@@ -86,6 +129,7 @@ router.post<any, JoinGameResponse, { username: string }>(
         gameState = joinResult;
       }
 
+      console.log('Game state created/joined successfully');
       res.json({
         status: 'success',
         gameState,
@@ -95,7 +139,8 @@ router.post<any, JoinGameResponse, { username: string }>(
       console.error('Error joining game:', error);
       res.status(500).json({ 
         status: 'error', 
-        message: error instanceof Error ? error.message : 'Unknown error' 
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
       });
     }
   }
@@ -105,14 +150,20 @@ router.post<any, JoinGameResponse, { username: string }>(
 router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<void> => {
   try {
     const context = getContext();
+    
+    if (!context) {
+      res.status(500).json({ status: 'error', message: 'Server context not available' });
+      return;
+    }
+    
     const { postId } = context;
-    const redis = getRedis();
 
     if (!postId) {
       res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
 
+    const redis = getRedis();
     const gameState = await getGame({ redis, postId });
     
     if (!gameState) {
@@ -128,7 +179,8 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
     console.error('Error getting game state:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -137,8 +189,13 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
 router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise<void> => {
   try {
     const context = getContext();
+    
+    if (!context) {
+      res.status(500).json({ status: 'error', message: 'Server context not available' });
+      return;
+    }
+    
     const { postId, userId } = context;
-    const redis = getRedis();
 
     if (!postId) {
       res.status(400).json({ status: 'error', message: 'postId is required' });
@@ -149,6 +206,7 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
       return;
     }
 
+    const redis = getRedis();
     const gameState = await startGame({ redis, postId, playerId: userId });
     
     if (!gameState) {
@@ -167,7 +225,8 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
     console.error('Error starting game:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -179,8 +238,13 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
     try {
       const { x, y } = req.body;
       const context = getContext();
+      
+      if (!context) {
+        res.status(500).json({ status: 'error', message: 'Server context not available' });
+        return;
+      }
+      
       const { postId, userId } = context;
-      const redis = getRedis();
 
       if (!postId) {
         res.status(400).json({ status: 'error', message: 'postId is required' });
@@ -195,6 +259,7 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         return;
       }
 
+      const redis = getRedis();
       const result = await findImpostor({ redis, postId, playerId: userId, x, y });
       
       if (!result.gameState) {
@@ -213,7 +278,8 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
       console.error('Error finding impostor:', error);
       res.status(500).json({ 
         status: 'error', 
-        message: error instanceof Error ? error.message : 'Unknown error' 
+        message: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
       });
     }
   }
@@ -223,14 +289,20 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
 router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
   try {
     const context = getContext();
+    
+    if (!context) {
+      res.status(500).json({ status: 'error', message: 'Server context not available' });
+      return;
+    }
+    
     const { postId } = context;
-    const redis = getRedis();
 
     if (!postId) {
       res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
 
+    const redis = getRedis();
     const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
@@ -246,7 +318,8 @@ router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promi
     console.error('Error updating timer:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error' 
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
     });
   }
 });
@@ -255,13 +328,24 @@ app.use(router);
 
 // Catch-all error handler
 app.use((req, res) => {
+  console.log(`404 - Route not found: ${req.method} ${req.path}`);
   res.status(404).json({ 
     status: 'error', 
-    message: 'Endpoint not found' 
+    message: 'Endpoint not found',
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
   });
 });
 
 const port = getServerPort();
 const server = createServer(app);
-server.on('error', (err) => console.error(`server error; ${err.stack}`));
-server.listen(port, () => console.log(`Server running on http://localhost:${port}`));
+
+server.on('error', (err) => {
+  console.error(`Server error: ${err.stack}`);
+});
+
+server.listen(port, () => {
+  console.log(`🚀 Reddimposters server running on http://localhost:${port}`);
+  console.log(`📊 Health check available at http://localhost:${port}/api/health`);
+});
