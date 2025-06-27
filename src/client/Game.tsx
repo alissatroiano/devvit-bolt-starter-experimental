@@ -73,6 +73,16 @@ export const Game: React.FC = () => {
   const fetchGameState = useCallback(async () => {
     try {
       const response = await fetch('/api/game-state');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response');
+      }
+      
       const result = await response.json();
       
       if (result.status === 'success') {
@@ -99,6 +109,15 @@ export const Game: React.FC = () => {
         body: JSON.stringify({ username: randomUsername }),
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned non-JSON response');
+      }
+      
       const result = await response.json();
       
       if (result.status === 'success') {
@@ -115,10 +134,12 @@ export const Game: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
               });
               
-              const startResult = await startResponse.json();
-              
-              if (startResult.status === 'success') {
-                setGameState(startResult.gameState);
+              if (startResponse.ok) {
+                const startResult = await startResponse.json();
+                
+                if (startResult.status === 'success') {
+                  setGameState(startResult.gameState);
+                }
               }
             } catch (err) {
               console.error('Error auto-starting game:', err);
@@ -130,7 +151,7 @@ export const Game: React.FC = () => {
       }
     } catch (err) {
       console.error('Error joining game:', err);
-      setError('Network error');
+      setError('Network error - please check your connection');
     } finally {
       setLoading(false);
     }
@@ -143,6 +164,10 @@ export const Game: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ x, y }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       
       const result = await response.json();
       
@@ -213,7 +238,7 @@ export const Game: React.FC = () => {
   // Auto-join game on initial load
   useEffect(() => {
     const init = async () => {
-      const existingGame = await fetchGameState();
+      await fetchGameState();
       if (!gameState) {
         await autoJoinGame();
       } else {
@@ -225,10 +250,10 @@ export const Game: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
         <div className="text-center">
           <div className="text-white text-xl mb-4">Loading game...</div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#0ea5e9] mx-auto"></div>
         </div>
       </div>
     );
@@ -237,8 +262,16 @@ export const Game: React.FC = () => {
   const renderGameContent = () => {
     if (!gameState) {
       return (
-        <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-          <div className="text-white text-xl">Failed to load game</div>
+        <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-white text-xl mb-4">Failed to load game</div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-[#0ea5e9] text-white px-4 py-2 rounded hover:bg-blue-600"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       );
     }
@@ -247,7 +280,7 @@ export const Game: React.FC = () => {
       case 'waiting':
         // Show a brief waiting message then auto-start
         return (
-          <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+          <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
             <div className="text-center">
               <div className="text-white text-xl mb-4">Preparing game...</div>
               <div className="animate-pulse text-gray-400">Starting in a moment...</div>
@@ -280,7 +313,7 @@ export const Game: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-[#1a1a2e] text-white">
       {showBanner && <Banner />}
       {renderGameContent()}
     </div>

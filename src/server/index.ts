@@ -23,30 +23,40 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text());
 
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    status: 'error', 
+    message: 'Internal server error' 
+  });
+});
+
 const router = express.Router();
 
 // Join or create game
 router.post<any, JoinGameResponse, { username: string }>(
   '/api/join',
   async (req, res): Promise<void> => {
-    const { username } = req.body;
-    const { postId, userId } = getContext();
-    const redis = getRedis();
-
-    if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' });
-      return;
-    }
-    if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' });
-      return;
-    }
-    if (!username) {
-      res.status(400).json({ status: 'error', message: 'Username is required' });
-      return;
-    }
-
     try {
+      const { username } = req.body;
+      const context = getContext();
+      const { postId, userId } = context;
+      const redis = getRedis();
+
+      if (!postId) {
+        res.status(400).json({ status: 'error', message: 'postId is required' });
+        return;
+      }
+      if (!userId) {
+        res.status(400).json({ status: 'error', message: 'Must be logged in' });
+        return;
+      }
+      if (!username) {
+        res.status(400).json({ status: 'error', message: 'Username is required' });
+        return;
+      }
+
       let gameState = await getGame({ redis, postId });
       
       if (!gameState) {
@@ -93,15 +103,16 @@ router.post<any, JoinGameResponse, { username: string }>(
 
 // Get current game state
 router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<void> => {
-  const { postId } = getContext();
-  const redis = getRedis();
-
-  if (!postId) {
-    res.status(400).json({ status: 'error', message: 'postId is required' });
-    return;
-  }
-
   try {
+    const context = getContext();
+    const { postId } = context;
+    const redis = getRedis();
+
+    if (!postId) {
+      res.status(400).json({ status: 'error', message: 'postId is required' });
+      return;
+    }
+
     const gameState = await getGame({ redis, postId });
     
     if (!gameState) {
@@ -124,19 +135,20 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
 
 // Start game (host only)
 router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise<void> => {
-  const { postId, userId } = getContext();
-  const redis = getRedis();
-
-  if (!postId) {
-    res.status(400).json({ status: 'error', message: 'postId is required' });
-    return;
-  }
-  if (!userId) {
-    res.status(400).json({ status: 'error', message: 'Must be logged in' });
-    return;
-  }
-
   try {
+    const context = getContext();
+    const { postId, userId } = context;
+    const redis = getRedis();
+
+    if (!postId) {
+      res.status(400).json({ status: 'error', message: 'postId is required' });
+      return;
+    }
+    if (!userId) {
+      res.status(400).json({ status: 'error', message: 'Must be logged in' });
+      return;
+    }
+
     const gameState = await startGame({ redis, postId, playerId: userId });
     
     if (!gameState) {
@@ -164,24 +176,25 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
 router.post<any, FindImpostorResponse, { x: number; y: number }>(
   '/api/find-impostor',
   async (req, res): Promise<void> => {
-    const { x, y } = req.body;
-    const { postId, userId } = getContext();
-    const redis = getRedis();
-
-    if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' });
-      return;
-    }
-    if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' });
-      return;
-    }
-    if (typeof x !== 'number' || typeof y !== 'number') {
-      res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
-      return;
-    }
-
     try {
+      const { x, y } = req.body;
+      const context = getContext();
+      const { postId, userId } = context;
+      const redis = getRedis();
+
+      if (!postId) {
+        res.status(400).json({ status: 'error', message: 'postId is required' });
+        return;
+      }
+      if (!userId) {
+        res.status(400).json({ status: 'error', message: 'Must be logged in' });
+        return;
+      }
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
+        return;
+      }
+
       const result = await findImpostor({ redis, postId, playerId: userId, x, y });
       
       if (!result.gameState) {
@@ -208,15 +221,16 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
 
 // Update game timer
 router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
-  const { postId } = getContext();
-  const redis = getRedis();
-
-  if (!postId) {
-    res.status(400).json({ status: 'error', message: 'postId is required' });
-    return;
-  }
-
   try {
+    const context = getContext();
+    const { postId } = context;
+    const redis = getRedis();
+
+    if (!postId) {
+      res.status(400).json({ status: 'error', message: 'postId is required' });
+      return;
+    }
+
     const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
@@ -239,7 +253,15 @@ router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promi
 
 app.use(router);
 
+// Catch-all error handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    status: 'error', 
+    message: 'Endpoint not found' 
+  });
+});
+
 const port = getServerPort();
 const server = createServer(app);
 server.on('error', (err) => console.error(`server error; ${err.stack}`));
-server.listen(port, () => console.log(`http://localhost:${port}`));
+server.listen(port, () => console.log(`Server running on http://localhost:${port}`));
