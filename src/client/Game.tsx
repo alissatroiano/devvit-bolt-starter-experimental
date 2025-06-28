@@ -67,43 +67,55 @@ export const Game: React.FC = () => {
   const [gameStarted, setGameStarted] = useState(false);
   const [serverHealth, setServerHealth] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
   const [retryCount, setRetryCount] = useState(0);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setShowBanner(!hostname.endsWith('devvit.net'));
   }, []);
 
-  // Check server health with retry logic
+  // Enhanced server health check with better retry logic
   const checkServerHealth = useCallback(async (attempt = 1): Promise<boolean> => {
     try {
-      console.log(`Health check attempt ${attempt}`);
+      console.log(`🔍 Health check attempt ${attempt}`);
+      setConnectionAttempts(prev => prev + 1);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch('/api/health', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const result = await response.json();
-        console.log('Server health check result:', result);
+        console.log('✅ Server health check result:', result);
         setServerHealth('healthy');
         setRetryCount(0);
+        setConnectionAttempts(0);
         return true;
       } else {
-        console.error('Health check failed with status:', response.status);
+        console.error('❌ Health check failed with status:', response.status);
+        const errorText = await response.text();
+        console.error('Error details:', errorText);
         setServerHealth('unhealthy');
         return false;
       }
     } catch (err) {
-      console.error(`Server health check failed (attempt ${attempt}):`, err);
+      console.error(`❌ Server health check failed (attempt ${attempt}):`, err);
       setServerHealth('unhealthy');
       
-      // Retry up to 3 times with exponential backoff
-      if (attempt < 3) {
-        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-        console.log(`Retrying health check in ${delay}ms...`);
+      // Retry up to 5 times with exponential backoff
+      if (attempt < 5) {
+        const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Max 10s delay
+        console.log(`⏳ Retrying health check in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return checkServerHealth(attempt + 1);
       }
@@ -114,12 +126,18 @@ export const Game: React.FC = () => {
 
   const fetchGameState = useCallback(async () => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
       const response = await fetch('/api/game-state', {
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        }
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         // Don't throw error for 404s during polling
@@ -141,7 +159,11 @@ export const Game: React.FC = () => {
         setError(result.message || 'Error fetching game state');
       }
     } catch (err) {
-      console.error('Error fetching game state:', err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log('⏰ Game state fetch timed out');
+        return;
+      }
+      console.error('❌ Error fetching game state:', err);
       // Don't set error for network issues during polling
     }
   }, []);
@@ -152,6 +174,7 @@ export const Game: React.FC = () => {
     
     try {
       // First check server health
+      console.log('🔍 Checking server health before joining...');
       const isHealthy = await checkServerHealth();
       if (!isHealthy) {
         setError('Server is not responding. Please try again in a moment.');
@@ -159,7 +182,10 @@ export const Game: React.FC = () => {
         return;
       }
 
-      console.log('Attempting to join game with username:', username);
+      console.log('🎮 Attempting to join game with username:', username);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
       const response = await fetch('/api/join', {
         method: 'POST',
@@ -168,25 +194,34 @@ export const Game: React.FC = () => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({ username: username.trim() }),
+        signal: controller.signal
       });
       
-      console.log('Join response status:', response.status);
+      clearTimeout(timeoutId);
+      console.log('📡 Join response status:', response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Join request failed:', errorText);
-        throw new Error(`Server error (${response.status}). Please try again.`);
+        console.error('❌ Join request failed:', errorText);
+        
+        // Try to parse as JSON for better error message
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.message || `Server error (${response.status})`);
+        } catch {
+          throw new Error(`Server error (${response.status}). Please try again.`);
+        }
       }
       
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const responseText = await response.text();
-        console.error('Non-JSON response:', responseText);
+        console.error('❌ Non-JSON response:', responseText);
         throw new Error('Server returned invalid response');
       }
       
       const result = await response.json();
-      console.log('Join result:', result);
+      console.log('✅ Join result:', result);
       
       if (result.status === 'success') {
         setGameState(result.gameState);
@@ -196,6 +231,7 @@ export const Game: React.FC = () => {
         
         // Auto-start the game if we're the host
         if (result.gameState.host === result.playerId && result.gameState.phase === 'waiting') {
+          console.log('👑 Auto-starting game as host...');
           setTimeout(async () => {
             try {
               const startResponse = await fetch('/api/start-game', {
@@ -211,10 +247,11 @@ export const Game: React.FC = () => {
                 
                 if (startResult.status === 'success') {
                   setGameState(startResult.gameState);
+                  console.log('🚀 Game auto-started successfully');
                 }
               }
             } catch (err) {
-              console.error('Error auto-starting game:', err);
+              console.error('❌ Error auto-starting game:', err);
             }
           }, 500);
         }
@@ -222,8 +259,12 @@ export const Game: React.FC = () => {
         setError(result.message || 'Error joining game');
       }
     } catch (err) {
-      console.error('Error joining game:', err);
-      setError(`Connection error: ${err instanceof Error ? err.message : 'Please try again'}`);
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Connection timed out. Please try again.');
+      } else {
+        console.error('❌ Error joining game:', err);
+        setError(`Connection error: ${err instanceof Error ? err.message : 'Please try again'}`);
+      }
       setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
@@ -232,6 +273,9 @@ export const Game: React.FC = () => {
 
   const findImpostor = useCallback(async (x: number, y: number) => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
       const response = await fetch('/api/find-impostor', {
         method: 'POST',
         headers: { 
@@ -239,7 +283,10 @@ export const Game: React.FC = () => {
           'Accept': 'application/json'
         },
         body: JSON.stringify({ x, y }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -260,7 +307,11 @@ export const Game: React.FC = () => {
         return { found: false, score: 0 };
       }
     } catch (err) {
-      console.error('Error finding impostor:', err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log('⏰ Find impostor request timed out');
+        return { found: false, score: 0 };
+      }
+      console.error('❌ Error finding impostor:', err);
       setError('Network error');
       return { found: false, score: 0 };
     }
@@ -281,7 +332,7 @@ export const Game: React.FC = () => {
     let interval: NodeJS.Timeout;
     
     if (gameState && gameStarted && serverHealth === 'healthy') {
-      interval = setInterval(fetchGameState, 2000); // Poll every 2 seconds
+      interval = setInterval(fetchGameState, 3000); // Poll every 3 seconds
     }
     
     return () => {
@@ -301,7 +352,7 @@ export const Game: React.FC = () => {
             headers: { 'Content-Type': 'application/json' },
           });
         } catch (err) {
-          console.error('Error updating timer:', err);
+          console.error('❌ Error updating timer:', err);
         }
       }, 1000); // Update every second
     }
@@ -314,6 +365,7 @@ export const Game: React.FC = () => {
   // Check for existing game and server health on load
   useEffect(() => {
     const init = async () => {
+      console.log('🚀 Initializing game...');
       const isHealthy = await checkServerHealth();
       if (isHealthy) {
         await fetchGameState();
@@ -331,7 +383,7 @@ export const Game: React.FC = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd700] mx-auto"></div>
           {serverHealth === 'unhealthy' && (
             <div className="mt-4 text-red-400 text-sm">
-              Server connection issues detected...
+              Server connection issues detected... (Attempt {connectionAttempts})
             </div>
           )}
         </div>
@@ -353,7 +405,7 @@ export const Game: React.FC = () => {
                 <div className="mt-2 text-xs text-green-400">🟢 Server Online</div>
               )}
               {serverHealth === 'unhealthy' && (
-                <div className="mt-2 text-xs text-red-400">🔴 Server Issues</div>
+                <div className="mt-2 text-xs text-red-400">🔴 Server Issues (Attempts: {connectionAttempts})</div>
               )}
             </div>
             
@@ -384,10 +436,10 @@ export const Game: React.FC = () => {
                 const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
                 joinGame(randomUsername);
               }}
-              disabled={serverHealth === 'unhealthy'}
+              disabled={serverHealth === 'unhealthy' || loading}
               className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors text-black"
             >
-              {serverHealth === 'unhealthy' ? '⚠️ SERVER OFFLINE' : '🚀 START HUNTING'}
+              {serverHealth === 'unhealthy' ? '⚠️ SERVER OFFLINE' : loading ? '🔄 CONNECTING...' : '🚀 START HUNTING'}
             </button>
             
             {error && (
@@ -408,8 +460,9 @@ export const Game: React.FC = () => {
                   <button 
                     onClick={() => checkServerHealth()}
                     className="ml-2 px-2 py-1 bg-yellow-600 text-black rounded text-xs hover:bg-yellow-500"
+                    disabled={loading}
                   >
-                    Retry
+                    {loading ? '...' : 'Retry'}
                   </button>
                 </div>
               </div>

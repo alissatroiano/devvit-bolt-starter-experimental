@@ -14,7 +14,6 @@ import {
   findImpostor,
   updateGameTimer,
 } from './core/game';
-import { getRedis } from '@devvit/redis';
 
 const app = express();
 
@@ -44,51 +43,65 @@ app.use((req, res, next) => {
 
 const router = express.Router();
 
-// Development mode detection
-const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.DEVVIT_CONTEXT;
+// Development mode detection - more robust
+const isDevelopment = () => {
+  try {
+    const context = getContext();
+    return !context || !context.postId || !context.userId;
+  } catch {
+    return true; // If getContext fails, assume development
+  }
+};
 
 // Mock Redis for development
 class MockRedis {
   private storage = new Map<string, string>();
   
   async get(key: string): Promise<string | null> {
-    return this.storage.get(key) || null;
+    const value = this.storage.get(key);
+    console.log(`MockRedis GET ${key}: ${value ? 'found' : 'not found'}`);
+    return value || null;
   }
   
   async setEx(key: string, ttl: number, value: string): Promise<void> {
+    console.log(`MockRedis SETEX ${key}: ${value.length} chars`);
     this.storage.set(key, value);
-    // In a real implementation, you'd handle TTL
   }
   
   async set(key: string, value: string): Promise<void> {
+    console.log(`MockRedis SET ${key}: ${value.length} chars`);
     this.storage.set(key, value);
   }
 }
 
+const mockRedis = new MockRedis();
+
 // Health check endpoint
 router.get('/api/health', (req, res) => {
   try {
-    let context = null;
-    let contextError = null;
+    const devMode = isDevelopment();
+    let contextInfo = null;
     
-    try {
-      context = getContext();
-    } catch (err) {
-      contextError = err instanceof Error ? err.message : 'Unknown context error';
+    if (!devMode) {
+      try {
+        const context = getContext();
+        contextInfo = {
+          hasPostId: !!context?.postId,
+          hasUserId: !!context?.userId,
+          hasReddit: !!context?.reddit,
+          hasRedis: !!context?.redis
+        };
+      } catch (err) {
+        contextInfo = { error: err instanceof Error ? err.message : 'Unknown error' };
+      }
     }
     
     res.json({ 
       status: 'success', 
       message: 'Server is running',
       timestamp: new Date().toISOString(),
-      development: isDevelopment,
-      context: context ? {
-        hasPostId: !!context.postId,
-        hasUserId: !!context.userId,
-        hasReddit: !!context.reddit,
-        hasRedis: !!context.redis
-      } : null,
-      contextError
+      development: devMode,
+      context: contextInfo
     });
   } catch (error) {
     console.error('Health check error:', error);
@@ -102,39 +115,60 @@ router.get('/api/health', (req, res) => {
 
 // Helper function to safely get context with development fallback
 function getSafeContext() {
-  if (isDevelopment) {
-    console.log('Running in development mode - using mock context');
+  const devMode = isDevelopment();
+  
+  if (devMode) {
+    console.log('🔧 Running in development mode - using mock context');
     return {
       postId: 'dev_post_123',
-      userId: 'dev_user_456',
-      redis: new MockRedis(),
+      userId: `dev_user_${Math.floor(Math.random() * 1000)}`,
+      redis: mockRedis,
       reddit: null,
-      ui: null
+      ui: null,
+      isDevelopment: true
     };
   }
   
   try {
     const context = getContext();
-    console.log('Production context retrieved:', {
+    if (!context) {
+      throw new Error('Context is null');
+    }
+    
+    console.log('🌐 Production context retrieved:', {
       hasContext: !!context,
-      postId: context?.postId,
-      userId: context?.userId,
-      hasReddit: !!context?.reddit,
-      hasRedis: !!context?.redis
+      postId: context.postId,
+      userId: context.userId,
+      hasReddit: !!context.reddit,
+      hasRedis: !!context.redis
     });
-    return context;
+    
+    // Import Redis dynamically for production
+    let redis;
+    try {
+      const { getRedis } = require('@devvit/redis');
+      redis = getRedis();
+    } catch (err) {
+      console.error('Failed to get Redis:', err);
+      redis = mockRedis; // Fallback to mock
+    }
+    
+    return {
+      ...context,
+      redis,
+      isDevelopment: false
+    };
   } catch (error) {
-    console.error('Error getting context:', error);
-    return null;
+    console.error('❌ Error getting context, falling back to development mode:', error);
+    return {
+      postId: 'fallback_post_123',
+      userId: `fallback_user_${Math.floor(Math.random() * 1000)}`,
+      redis: mockRedis,
+      reddit: null,
+      ui: null,
+      isDevelopment: true
+    };
   }
-}
-
-// Helper to get Redis instance
-function getRedisInstance() {
-  if (isDevelopment) {
-    return new MockRedis();
-  }
-  return getRedis();
 }
 
 // Join or create game
@@ -144,38 +178,30 @@ router.post<any, JoinGameResponse, { username: string }>(
     try {
       console.log('=== JOIN GAME REQUEST ===');
       console.log('Request body:', req.body);
-      console.log('Development mode:', isDevelopment);
       
       const { username } = req.body;
       
       if (!username || typeof username !== 'string' || username.trim().length === 0) {
-        console.log('Invalid username provided');
+        console.log('❌ Invalid username provided');
         res.status(400).json({ status: 'error', message: 'Valid username is required' });
         return;
       }
 
       const context = getSafeContext();
+      const { postId, userId, redis, isDevelopment: devMode } = context;
       
-      if (!context) {
-        console.error('No context available');
-        res.status(500).json({ status: 'error', message: 'Server context not available' });
-        return;
-      }
-      
-      const { postId, userId } = context;
-      console.log('Using context:', { postId, userId, isDev: isDevelopment });
+      console.log('📋 Using context:', { postId, userId, devMode });
       
       if (!postId || !userId) {
-        console.error('Missing postId or userId in context');
-        res.status(400).json({ status: 'error', message: 'Invalid context data' });
+        console.error('❌ Missing postId or userId in context');
+        res.status(500).json({ status: 'error', message: 'Server configuration error' });
         return;
       }
 
-      const redis = isDevelopment ? context.redis : getRedis();
       let gameState = await getGame({ redis, postId });
       
       if (!gameState) {
-        console.log('Creating new game');
+        console.log('🎮 Creating new game');
         gameState = await createGame({
           redis,
           postId,
@@ -183,7 +209,7 @@ router.post<any, JoinGameResponse, { username: string }>(
           hostUsername: username.trim(),
         });
       } else {
-        console.log('Joining existing game');
+        console.log('🔗 Joining existing game');
         const joinResult = await joinGame({
           redis,
           postId,
@@ -201,17 +227,17 @@ router.post<any, JoinGameResponse, { username: string }>(
         gameState = joinResult;
       }
 
-      console.log('Game state created/joined successfully');
+      console.log('✅ Game state created/joined successfully');
       res.json({
         status: 'success',
         gameState,
         playerId: userId,
       });
     } catch (error) {
-      console.error('Error in join endpoint:', error);
+      console.error('❌ Error in join endpoint:', error);
       res.status(500).json({ 
         status: 'error', 
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date().toISOString()
       });
     }
@@ -222,43 +248,36 @@ router.post<any, JoinGameResponse, { username: string }>(
 router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<void> => {
   try {
     console.log('=== GAME STATE REQUEST ===');
-    console.log('Development mode:', isDevelopment);
     
     const context = getSafeContext();
+    const { postId, redis, isDevelopment: devMode } = context;
     
-    if (!context) {
-      console.log('No context for game state');
+    console.log('📋 Game state context:', { postId, devMode });
+
+    if (!postId) {
+      console.log('❌ No postId for game state');
       res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
-    
-    const { postId } = context;
 
-    if (!postId) {
-      console.error('No postId in context for game state');
-      res.status(400).json({ status: 'error', message: 'postId is required' });
-      return;
-    }
-
-    const redis = isDevelopment ? context.redis : getRedis();
     const gameState = await getGame({ redis, postId });
     
     if (!gameState) {
-      console.log('No game state found for postId:', postId);
+      console.log('📭 No game state found for postId:', postId);
       res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
-    console.log('Game state retrieved successfully');
+    console.log('✅ Game state retrieved successfully');
     res.json({
       status: 'success',
       gameState,
     });
   } catch (error) {
-    console.error('Error getting game state:', error);
+    console.error('❌ Error getting game state:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       timestamp: new Date().toISOString()
     });
   }
@@ -268,17 +287,11 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
 router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise<void> => {
   try {
     console.log('=== START GAME REQUEST ===');
-    console.log('Development mode:', isDevelopment);
     
     const context = getSafeContext();
+    const { postId, userId, redis, isDevelopment: devMode } = context;
     
-    if (!context) {
-      console.error('No context for start game');
-      res.status(500).json({ status: 'error', message: 'Server context not available' });
-      return;
-    }
-    
-    const { postId, userId } = context;
+    console.log('📋 Start game context:', { postId, userId, devMode });
 
     if (!postId) {
       res.status(400).json({ status: 'error', message: 'postId is required' });
@@ -289,7 +302,6 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
       return;
     }
 
-    const redis = isDevelopment ? context.redis : getRedis();
     const gameState = await startGame({ redis, postId, playerId: userId });
     
     if (!gameState) {
@@ -300,16 +312,16 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
       return;
     }
 
-    console.log('Game started successfully');
+    console.log('✅ Game started successfully');
     res.json({
       status: 'success',
       gameState,
     });
   } catch (error) {
-    console.error('Error starting game:', error);
+    console.error('❌ Error starting game:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       timestamp: new Date().toISOString()
     });
   }
@@ -322,7 +334,6 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
     try {
       console.log('=== FIND IMPOSTOR REQUEST ===');
       console.log('Request body:', req.body);
-      console.log('Development mode:', isDevelopment);
       
       const { x, y } = req.body;
       
@@ -332,14 +343,9 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
       }
       
       const context = getSafeContext();
+      const { postId, userId, redis, isDevelopment: devMode } = context;
       
-      if (!context) {
-        console.error('No context for find impostor');
-        res.status(500).json({ status: 'error', message: 'Server context not available' });
-        return;
-      }
-      
-      const { postId, userId } = context;
+      console.log('📋 Find impostor context:', { postId, userId, devMode });
 
       if (!postId) {
         res.status(400).json({ status: 'error', message: 'postId is required' });
@@ -350,7 +356,6 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         return;
       }
 
-      const redis = isDevelopment ? context.redis : getRedis();
       const result = await findImpostor({ redis, postId, playerId: userId, x, y });
       
       if (!result.gameState) {
@@ -358,7 +363,7 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         return;
       }
 
-      console.log('Find impostor completed:', { found: result.found, score: result.score });
+      console.log('✅ Find impostor completed:', { found: result.found, score: result.score });
       res.json({
         status: 'success',
         gameState: result.gameState,
@@ -367,10 +372,10 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         score: result.score,
       });
     } catch (error) {
-      console.error('Error finding impostor:', error);
+      console.error('❌ Error finding impostor:', error);
       res.status(500).json({ 
         status: 'error', 
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date().toISOString()
       });
     }
@@ -381,21 +386,13 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
 router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
   try {
     const context = getSafeContext();
-    
-    if (!context) {
-      // Silently fail for timer updates when no context
-      res.status(404).json({ status: 'error', message: 'Game not found' });
-      return;
-    }
-    
-    const { postId } = context;
+    const { postId, redis } = context;
 
     if (!postId) {
       res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
 
-    const redis = isDevelopment ? context.redis : getRedis();
     const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
@@ -408,10 +405,10 @@ router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promi
       gameState,
     });
   } catch (error) {
-    console.error('Error updating timer:', error);
+    console.error('❌ Error updating timer:', error);
     res.status(500).json({ 
       status: 'error', 
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       timestamp: new Date().toISOString()
     });
   }
@@ -421,19 +418,19 @@ app.use(router);
 
 // Enhanced error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled server error:', err);
+  console.error('💥 Unhandled server error:', err);
   
   // Send proper JSON error response
   res.status(500).json({ 
     status: 'error', 
-    message: isDevelopment ? err.message : 'Internal server error',
+    message: `Internal server error: ${err.message}`,
     timestamp: new Date().toISOString()
   });
 });
 
 // Catch-all error handler
 app.use((req, res) => {
-  console.log(`404 - Route not found: ${req.method} ${req.path}`);
+  console.log(`❓ 404 - Route not found: ${req.method} ${req.path}`);
   res.status(404).json({ 
     status: 'error', 
     message: 'Endpoint not found',
@@ -447,19 +444,24 @@ const port = getServerPort();
 const server = createServer(app);
 
 server.on('error', (err) => {
-  console.error(`Server error: ${err.stack}`);
+  console.error(`💥 Server error: ${err.stack}`);
 });
 
 server.listen(port, () => {
   console.log(`🚀 Reddimposters server running on http://localhost:${port}`);
   console.log(`📊 Health check available at http://localhost:${port}/api/health`);
-  console.log(`🔧 Development mode: ${isDevelopment}`);
+  console.log(`🔧 Development mode: ${isDevelopment()}`);
   
   // Test context on startup
   try {
     const context = getSafeContext();
-    console.log('Startup context check:', context ? 'Available' : 'Not available');
+    console.log('🔍 Startup context check:', context ? 'Available' : 'Not available');
+    console.log('📋 Context details:', {
+      postId: context?.postId,
+      userId: context?.userId,
+      isDev: context?.isDevelopment
+    });
   } catch (error) {
-    console.log('Startup context check failed:', error);
+    console.log('❌ Startup context check failed:', error);
   }
 });
