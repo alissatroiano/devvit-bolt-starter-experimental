@@ -36,7 +36,7 @@ export const createGame = async ({
   hostId,
   hostUsername,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
   hostId: string;
   hostUsername: string;
@@ -76,7 +76,7 @@ export const getGame = async ({
   redis,
   postId,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
 }): Promise<GameState | null> => {
   const gameData = await redis.get(getGameKey(postId));
@@ -87,7 +87,7 @@ export const updateGame = async ({
   redis,
   gameState,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   gameState: GameState;
 }): Promise<void> => {
   // Use set with expiration instead of setEx
@@ -100,7 +100,7 @@ export const joinGame = async ({
   playerId,
   username,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
   playerId: string;
   username: string;
@@ -137,7 +137,7 @@ export const startGame = async ({
   postId,
   playerId,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
   playerId: string;
 }): Promise<GameState | null> => {
@@ -170,7 +170,7 @@ export const findImpostor = async ({
   x,
   y,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
   playerId: string;
   x: number;
@@ -242,7 +242,7 @@ export const updateGameTimer = async ({
   redis,
   postId,
 }: {
-  redis: Context['redis'] | RedisClient;
+  redis: Context['redis'] | RedisClient | any;
   postId: string;
 }): Promise<GameState | null> => {
   const gameState = await getGame({ redis, postId });

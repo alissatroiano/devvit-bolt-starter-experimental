@@ -180,7 +180,7 @@ router.post('/api/join', async (req, res): Promise<void> => {
     
     if (!username || typeof username !== 'string' || username.trim().length === 0) {
       console.log('❌ Invalid username provided');
-      res.status(400).json({ status: 'error', message: 'Valid username is required' } as JoinGameResponse);
+      res.status(400).json({ status: 'error', message: 'Valid username is required' });
       return;
     }
 
@@ -191,7 +191,7 @@ router.post('/api/join', async (req, res): Promise<void> => {
     
     if (!postId || !userId) {
       console.error('❌ Missing postId or userId in context');
-      res.status(500).json({ status: 'error', message: 'Server configuration error' } as JoinGameResponse);
+      res.status(500).json({ status: 'error', message: 'Server configuration error' });
       return;
     }
 
@@ -218,7 +218,7 @@ router.post('/api/join', async (req, res): Promise<void> => {
         res.status(400).json({ 
           status: 'error', 
           message: 'Cannot join game (full or other issue)' 
-        } as JoinGameResponse);
+        });
         return;
       }
       gameState = joinResult;
@@ -229,13 +229,13 @@ router.post('/api/join', async (req, res): Promise<void> => {
       status: 'success',
       gameState,
       playerId: userId,
-    } as JoinGameResponse);
+    });
   } catch (error) {
     console.error('❌ Error in join endpoint:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    } as JoinGameResponse);
+    });
   }
 });
 
@@ -251,7 +251,7 @@ router.get('/api/game-state', async (_req, res): Promise<void> => {
 
     if (!postId) {
       console.log('❌ No postId for game state');
-      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
@@ -259,7 +259,7 @@ router.get('/api/game-state', async (_req, res): Promise<void> => {
     
     if (!gameState) {
       console.log('📭 No game state found for postId:', postId);
-      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
@@ -267,13 +267,13 @@ router.get('/api/game-state', async (_req, res): Promise<void> => {
     res.json({
       status: 'success',
       gameState,
-    } as GameStateResponse);
+    });
   } catch (error) {
     console.error('❌ Error getting game state:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    } as GameStateResponse);
+    });
   }
 });
 
@@ -288,11 +288,11 @@ router.post('/api/start-game', async (_req, res): Promise<void> => {
     console.log('📋 Start game context:', { postId, userId, devMode });
 
     if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' } as StartGameResponse);
+      res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
     if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' } as StartGameResponse);
+      res.status(400).json({ status: 'error', message: 'Must be logged in' });
       return;
     }
 
@@ -302,7 +302,7 @@ router.post('/api/start-game', async (_req, res): Promise<void> => {
       res.status(400).json({ 
         status: 'error', 
         message: 'Cannot start game (not host, already started, or not enough players)' 
-      } as StartGameResponse);
+      });
       return;
     }
 
@@ -310,13 +310,13 @@ router.post('/api/start-game', async (_req, res): Promise<void> => {
     res.json({
       status: 'success',
       gameState,
-    } as StartGameResponse);
+    });
   } catch (error) {
     console.error('❌ Error starting game:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    } as StartGameResponse);
+    });
   }
 });
 
@@ -329,7 +329,7 @@ router.post('/api/find-impostor', async (req, res): Promise<void> => {
     const { x, y } = req.body;
     
     if (typeof x !== 'number' || typeof y !== 'number') {
-      res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' } as FindImpostorResponse);
+      res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
       return;
     }
     
@@ -339,18 +339,18 @@ router.post('/api/find-impostor', async (req, res): Promise<void> => {
     console.log('📋 Find impostor context:', { postId, userId, devMode });
 
     if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' } as FindImpostorResponse);
+      res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
     if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' } as FindImpostorResponse);
+      res.status(400).json({ status: 'error', message: 'Must be logged in' });
       return;
     }
 
     const result = await findImpostor({ redis, postId, playerId: userId, x, y });
     
     if (!result.gameState) {
-      res.status(404).json({ status: 'error', message: 'Game not found' } as FindImpostorResponse);
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
@@ -361,13 +361,13 @@ router.post('/api/find-impostor', async (req, res): Promise<void> => {
       found: result.found,
       impostor: result.impostor,
       score: result.score,
-    } as FindImpostorResponse);
+    });
   } catch (error) {
     console.error('❌ Error finding impostor:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    } as FindImpostorResponse);
+    });
   }
 });
 
@@ -378,27 +378,27 @@ router.post('/api/update-timer', async (_req, res): Promise<void> => {
     const { postId, redis } = context;
 
     if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' } as GameStateResponse);
+      res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
 
     const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
-      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
     res.json({
       status: 'success',
       gameState,
-    } as GameStateResponse);
+    });
   } catch (error) {
     console.error('❌ Error updating timer:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    } as GameStateResponse);
+    });
   }
 });
 
