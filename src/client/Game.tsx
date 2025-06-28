@@ -68,20 +68,21 @@ export const Game: React.FC = () => {
   const [serverHealth, setServerHealth] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
   const [retryCount, setRetryCount] = useState(0);
   const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [serverDiagnostics, setServerDiagnostics] = useState<any>(null);
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setShowBanner(!hostname.endsWith('devvit.net'));
   }, []);
 
-  // Enhanced server health check with better retry logic
+  // Enhanced server health check with better diagnostics
   const checkServerHealth = useCallback(async (attempt = 1): Promise<boolean> => {
     try {
       console.log(`🔍 Health check attempt ${attempt}`);
       setConnectionAttempts(prev => prev + 1);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
       const response = await fetch('/api/health', {
         method: 'GET',
@@ -98,23 +99,32 @@ export const Game: React.FC = () => {
         const result = await response.json();
         console.log('✅ Server health check result:', result);
         setServerHealth('healthy');
+        setServerDiagnostics(result.diagnostics);
         setRetryCount(0);
         setConnectionAttempts(0);
+        setError('');
         return true;
       } else {
         console.error('❌ Health check failed with status:', response.status);
         const errorText = await response.text();
         console.error('Error details:', errorText);
         setServerHealth('unhealthy');
+        setError(`Server error (${response.status}): ${errorText}`);
         return false;
       }
     } catch (err) {
       console.error(`❌ Server health check failed (attempt ${attempt}):`, err);
       setServerHealth('unhealthy');
       
-      // Retry up to 5 times with exponential backoff
-      if (attempt < 5) {
-        const delay = Math.min(Math.pow(2, attempt) * 1000, 10000); // Max 10s delay
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Connection timeout - server may be starting up');
+      } else {
+        setError(`Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      }
+      
+      // Retry up to 3 times with exponential backoff
+      if (attempt < 3) {
+        const delay = Math.min(Math.pow(2, attempt) * 2000, 10000); // Max 10s delay
         console.log(`⏳ Retrying health check in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return checkServerHealth(attempt + 1);
@@ -127,7 +137,7 @@ export const Game: React.FC = () => {
   const fetchGameState = useCallback(async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
       const response = await fetch('/api/game-state', {
         headers: {
@@ -185,7 +195,7 @@ export const Game: React.FC = () => {
       console.log('🎮 Attempting to join game with username:', username);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
       
       const response = await fetch('/api/join', {
         method: 'POST',
@@ -274,7 +284,7 @@ export const Game: React.FC = () => {
   const findImpostor = useCallback(async (x: number, y: number) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
       
       const response = await fetch('/api/find-impostor', {
         method: 'POST',
@@ -386,6 +396,12 @@ export const Game: React.FC = () => {
               Server connection issues detected... (Attempt {connectionAttempts})
             </div>
           )}
+          {serverDiagnostics && (
+            <div className="mt-4 text-xs text-gray-400 max-w-md">
+              Context: {serverDiagnostics.context?.isDevelopment ? 'Development' : 'Production'} | 
+              Redis: {serverDiagnostics.redis?.type}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -406,6 +422,12 @@ export const Game: React.FC = () => {
               )}
               {serverHealth === 'unhealthy' && (
                 <div className="mt-2 text-xs text-red-400">🔴 Server Issues (Attempts: {connectionAttempts})</div>
+              )}
+              {serverDiagnostics && (
+                <div className="mt-1 text-xs text-gray-400">
+                  {serverDiagnostics.context?.isDevelopment ? '🔧 Dev Mode' : '🌐 Production'} | 
+                  Redis: {serverDiagnostics.redis?.working ? '✅' : '❌'}
+                </div>
               )}
             </div>
             
