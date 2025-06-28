@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { GameResults } from './components/GameResults';
-import { GameState, Player, Impostor } from '../shared/types/game';
+import { GameState, Player } from '../shared/types/game';
 import packageJson from '../../package.json';
 
 const Banner = () => {

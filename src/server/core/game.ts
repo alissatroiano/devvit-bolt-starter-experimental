@@ -278,7 +278,7 @@ function updateLeaderboard(gameState: GameState): void {
       playerId: player.id,
       username: player.username,
       score: player.score,
-      timeCompleted: player.timeCompleted || undefined, // Fix the type issue
+      ...(player.timeCompleted && { timeCompleted: player.timeCompleted }), // Only include if defined
     }))
     .sort((a, b) => {
       // Sort by score first, then by completion time

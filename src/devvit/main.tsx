@@ -44,7 +44,7 @@ Devvit.addCustomPostType({
       url: 'index.html',
 
       // Handle messages sent from the web view (if needed)
-      async onMessage(message, webView) {
+      async onMessage(message, _webView) {
         // Handle any messages from the webview if needed
         console.log('Message from webview:', message);
       },
@@ -86,8 +86,6 @@ Devvit.addCustomPostType({
                 onPress={() => webView.mount()}
                 appearance="primary"
                 size="large"
-                backgroundColor="#ffd700"
-                textColor="#000000"
               >
                 PLAY
               </button>
@@ -98,8 +96,6 @@ Devvit.addCustomPostType({
                 }}
                 appearance="secondary"
                 size="medium"
-                backgroundColor="#333333"
-                textColor="#ffffff"
               >
                 FAQ
               </button>

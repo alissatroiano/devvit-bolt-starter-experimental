@@ -65,7 +65,7 @@ class MockRedis {
     return value || null;
   }
   
-  async set(key: string, value: string, options?: { expiration?: Date }): Promise<void> {
+  async set(key: string, value: string, _options?: { expiration?: Date }): Promise<void> {
     console.log(`MockRedis SET ${key}: ${value.length} chars`);
     this.storage.set(key, value);
   }
