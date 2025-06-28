@@ -1,8 +1,5 @@
 import { Devvit, useState, useWebView } from '@devvit/public-api';
 
-// Side effect import to bundle the server. The /index is required for server splitting.
-// import '../server/index';
-
 Devvit.configure({
   redditAPI: true,
   redis: true,

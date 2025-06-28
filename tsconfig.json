@@ -4,7 +4,6 @@
   "references": [
     { "path": "./src/devvit" },
     { "path": "./src/client" },
-    { "path": "./src/shared" },
-    { "path": "./src/server" }
+    { "path": "./src/shared" }
   ]
 }
