@@ -76,18 +76,6 @@ interface GameState {
   endTime?: number;
 }
 
-// Function to send message to Devvit
-const sendMessageToDevvit = (type: string, data: any) => {
-  try {
-    // Check if we're in a Devvit webview
-    if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type, data }, '*');
-    }
-  } catch (error) {
-    console.log('Not in Devvit context or message failed:', error);
-  }
-};
-
 export const Game: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     phase: 'start',
@@ -143,23 +131,12 @@ export const Game: React.FC = () => {
           const newTimeLeft = prev.timeLeft - 1;
           if (newTimeLeft <= 0) {
             // Game over - time's up
-            const finalState = {
+            return {
               ...prev,
-              phase: 'ended' as const,
+              phase: 'ended',
               timeLeft: 0,
               endTime: Date.now()
             };
-            
-            // Send result to Devvit
-            const timeUsed = prev.startTime ? Math.floor((Date.now() - prev.startTime) / 1000) : 300;
-            sendMessageToDevvit('GAME_COMPLETED', {
-              score: prev.score,
-              timeUsed,
-              impostorsFound: prev.foundImpostors.length,
-              totalImpostors: impostors.length
-            });
-            
-            return finalState;
           }
           return { ...prev, timeLeft: newTimeLeft };
         });
@@ -176,7 +153,7 @@ export const Game: React.FC = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [gameState.phase, impostors.length]);
+  }, [gameState.phase]);
 
   const startGame = useCallback(() => {
     setGameState({
@@ -213,17 +190,17 @@ export const Game: React.FC = () => {
         // Check if all impostors found
         if (newFoundImpostors.length === impostors.length) {
           // Game won!
-          const completionBonus = prev.timeLeft * 2; // Big bonus for completing
-          const finalScore = newScore + completionBonus;
+          const finalScore = newScore + (prev.timeLeft * 2); // Big bonus for completing
           
-          // Send result to Devvit
-          const timeUsed = prev.startTime ? Math.floor((Date.now() - prev.startTime) / 1000) : 300 - prev.timeLeft;
-          sendMessageToDevvit('GAME_COMPLETED', {
+          // Save to localStorage for Devvit preview
+          const gameResult = {
             score: finalScore,
-            timeUsed,
+            timeUsed: 300 - prev.timeLeft,
             impostorsFound: newFoundImpostors.length,
-            totalImpostors: impostors.length
-          });
+            totalImpostors: impostors.length,
+            completedAt: Date.now()
+          };
+          localStorage.setItem('reddimposters_result', JSON.stringify(gameResult));
           
           return {
             ...prev,
@@ -245,7 +222,7 @@ export const Game: React.FC = () => {
     }
 
     return { found: false, score: 0 };
-  }, [gameState.phase, gameState.foundImpostors, gameState.timeLeft, gameState.startTime, impostors]);
+  }, [gameState.phase, gameState.foundImpostors, gameState.timeLeft]);
 
   const playAgain = useCallback(() => {
     setGameState({
