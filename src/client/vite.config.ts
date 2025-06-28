@@ -1,10 +1,17 @@
 import { defineConfig } from 'vite';
-import tailwind from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwind()],
+  plugins: [react()],
+  css: {
+    postcss: {
+      plugins: [
+        require('tailwindcss'),
+        require('autoprefixer'),
+      ],
+    },
+  },
   server: {
     proxy: {
       '/api': {
