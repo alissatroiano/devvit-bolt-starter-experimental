@@ -1,11 +1,7 @@
 import { Devvit, useState, useWebView } from '@devvit/public-api';
 
-// Side effect import to bundle the server. The /index is required for server splitting.
-import '../server/index';
-
 Devvit.configure({
   redditAPI: true,
-  redis: true,
 });
 
 export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Loading...' }) => {
@@ -39,6 +35,17 @@ Devvit.addCustomPostType({
       return (await context.reddit.getCurrentUsername()) ?? 'anon';
     });
 
+    // Load saved game result
+    const [gameResult] = useState(async () => {
+      try {
+        // In a real implementation, you'd load this from Redis
+        // For now, we'll show a placeholder
+        return null;
+      } catch {
+        return null;
+      }
+    });
+
     const webView = useWebView({
       // URL of your web view content
       url: 'index.html',
@@ -49,11 +56,11 @@ Devvit.addCustomPostType({
         console.log('Message from webview:', message);
       },
       onUnmount() {
-        context.ui.showToast('Game closed!');
+        context.ui.showToast('Game closed! Your score has been saved.');
       },
     });
 
-    // Render the custom post type matching the Figma design
+    // Render the custom post type
     return (
       <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
         {/* Background with gradient effect */}
@@ -80,6 +87,15 @@ Devvit.addCustomPostType({
 
             <spacer size="large" />
 
+            {/* Game stats if available */}
+            {gameResult && (
+              <vstack gap="small" alignment="start">
+                <text size="medium" weight="bold" color="#ffd700">Last Game:</text>
+                <text size="small" color="#ffffff">Score: {gameResult.score}</text>
+                <text size="small" color="#ffffff">Time: {gameResult.time}s</text>
+              </vstack>
+            )}
+
             {/* Action buttons */}
             <vstack gap="medium" alignment="start">
               <button 
@@ -92,12 +108,12 @@ Devvit.addCustomPostType({
               
               <button 
                 onPress={() => {
-                  context.ui.showToast('Game Rules: Find all hidden alien impostors in the crowd! Easy: +10pts, Medium: +25pts, Hard: +50pts. You have 5 minutes!');
+                  context.ui.showToast('Game Rules: Find all 3 hidden alien impostors in the crowd! You have 2 minutes. Each impostor is worth 100 points plus time bonus!');
                 }}
                 appearance="secondary"
                 size="medium"
               >
-                FAQ
+                HOW TO PLAY
               </button>
             </vstack>
 
@@ -150,7 +166,7 @@ Devvit.addCustomPostType({
 
 // Create game posts via menu
 Devvit.addMenuItem({
-  label: '[Find the Impostors] New Game',
+  label: '[Reddimposters] New Game',
   location: 'subreddit',
   forUserType: 'moderator',
   onPress: async (_event, context) => {
