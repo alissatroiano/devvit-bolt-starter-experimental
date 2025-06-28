@@ -64,23 +64,11 @@ Devvit.addCustomPostType({
       },
     });
 
-    // Render the custom post type with logo in top right
+    // Render the custom post type with simplified design
     return (
       <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
         {/* Background with gradient effect */}
         <vstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e" />
-        
-        {/* Logo in top right corner */}
-        <vstack alignment="top end" padding="medium">
-          <image
-            url="logo.png"
-            description="Bolt.new Logo"
-            width="80px"
-            height="80px"
-            imageWidth="360px"
-            imageHeight="360px"
-          />
-        </vstack>
         
         {/* Main content */}
         <hstack width={'100%'} height={'100%'} alignment="center middle" gap="large" padding="large">
@@ -165,6 +153,13 @@ Devvit.addCustomPostType({
         {/* Decorative elements */}
         <vstack alignment="top start" padding="medium">
           <text color="#ff4444" size="large">✦</text>
+        </vstack>
+        
+        {/* Bolt.new branding in top right */}
+        <vstack alignment="top end" padding="medium">
+          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="80px" height="80px">
+            <text color="#000000" size="medium" weight="bold">BOLT</text>
+          </hstack>
         </vstack>
 
         <vstack alignment="bottom start" padding="medium">
