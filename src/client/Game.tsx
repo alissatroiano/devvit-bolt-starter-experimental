@@ -63,7 +63,7 @@ interface Impostor {
   y: number;
   width: number;
   height: number;
-  emoji: string;
+  image: string;
   found: boolean;
 }
 
@@ -87,7 +87,7 @@ export const Game: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Predefined impostor locations using emojis
+  // Predefined impostor locations
   const impostors: Impostor[] = [
     {
       id: 'impostor1',
@@ -95,7 +95,7 @@ export const Game: React.FC = () => {
       y: 25,
       width: 60,
       height: 80,
-      emoji: '👽',
+      image: '/assets/imposter-1.png',
       found: false
     },
     {
@@ -104,7 +104,7 @@ export const Game: React.FC = () => {
       y: 45,
       width: 50,
       height: 70,
-      emoji: '🛸',
+      image: '/assets/imposter-2.png',
       found: false
     },
     {
@@ -113,7 +113,7 @@ export const Game: React.FC = () => {
       y: 70,
       width: 45,
       height: 65,
-      emoji: '👾',
+      image: '/assets/imposter-3.png',
       found: false
     }
   ];
@@ -247,7 +247,7 @@ export const Game: React.FC = () => {
             <div className="space-y-4 mb-6">
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
                 <h3 className="text-[#ffd700] font-bold mb-2">🎯 Objective</h3>
-                <p className="text-sm text-gray-300">Find all 3 alien impostors (👽 🛸 👾) hidden in the crowd before time runs out!</p>
+                <p className="text-sm text-gray-300">Find all 3 alien impostors hidden in the crowd before time runs out!</p>
               </div>
               
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">

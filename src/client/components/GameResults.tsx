@@ -6,7 +6,7 @@ interface Impostor {
   y: number;
   width: number;
   height: number;
-  emoji: string;
+  image: string;
   found: boolean;
 }
 
@@ -95,10 +95,14 @@ export const GameResults: React.FC<GameResultsProps> = ({
                     : 'border-gray-600 bg-gray-800/50'
                 }`}
               >
-                <div className="aspect-square flex items-center justify-center mb-2 text-6xl">
-                  <span className={gameState.foundImpostors.includes(impostor.id) ? '' : 'grayscale opacity-50'}>
-                    {impostor.emoji}
-                  </span>
+                <div className="aspect-square flex items-center justify-center mb-2">
+                  <img
+                    src={impostor.image}
+                    alt={`Impostor ${impostor.id}`}
+                    className={`max-w-full max-h-full object-contain ${
+                      gameState.foundImpostors.includes(impostor.id) ? '' : 'grayscale opacity-50'
+                    }`}
+                  />
                 </div>
                 <div className="text-center">
                   {gameState.foundImpostors.includes(impostor.id) ? (
