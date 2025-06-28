@@ -21,10 +21,10 @@
     "type-check": "tsc --build"
   },
   "dependencies": {
-    "@devvit/client": "0.11.16",
-    "@devvit/public-api": "0.11.16",
-    "@devvit/redis": "0.11.16",
-    "@devvit/server": "0.11.16",
+    "@devvit/client": "0.11.17",
+    "@devvit/public-api": "0.11.17",
+    "@devvit/redis": "0.11.17",
+    "@devvit/server": "0.11.17",
     "@tweenjs/tween.js": "18.6.4",
     "clsx": "2.1.1",
     "devvit": "0.11.17",
