@@ -1,7 +1,7 @@
 import { Devvit, useState, useWebView } from '@devvit/public-api';
 
 // Side effect import to bundle the server. The /index is required for server splitting.
-import '../server/index';
+// import '../server/index';
 
 Devvit.configure({
   redditAPI: true,
@@ -12,16 +12,7 @@ export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Load
   return (
     <zstack width={'100%'} height={'100%'} alignment="center middle">
       <vstack width={'100%'} height={'100%'} alignment="center middle">
-        <image
-          url="loading.gif"
-          description="Loading..."
-          height={'140px'}
-          width={'140px'}
-          imageHeight={'240px'}
-          imageWidth={'240px'}
-        />
-        <spacer size="small" />
-        <text maxWidth={`80%`} size="large" weight="bold" alignment="center middle" wrap>
+        <text size="large" weight="bold" alignment="center middle" wrap>
           {text}
         </text>
       </vstack>
@@ -39,17 +30,6 @@ Devvit.addCustomPostType({
       return (await context.reddit.getCurrentUsername()) ?? 'anon';
     });
 
-    // Check for saved game results
-    const [gameResult] = useState(async () => {
-      try {
-        // In a real implementation, you'd get this from Redis using the user's ID
-        // For now, we'll simulate a result
-        return null;
-      } catch {
-        return null;
-      }
-    });
-
     const webView = useWebView({
       // URL of your web view content
       url: 'index.html',
@@ -64,17 +44,14 @@ Devvit.addCustomPostType({
       },
     });
 
-    // Render the custom post type with simplified design
+    // Render the custom post type with completely simplified design
     return (
-      <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
-        {/* Background with gradient effect */}
-        <vstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e" />
-        
+      <zstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e">
         {/* Main content */}
         <hstack width={'100%'} height={'100%'} alignment="center middle" gap="large" padding="large">
           {/* Left side - Text content */}
           <vstack alignment="start middle" gap="medium" grow>
-            {/* Title with red accent */}
+            {/* Title */}
             <vstack alignment="start" gap="small">
               <text size="xxlarge" weight="bold" color="#ff4444">
                 Reddimposters
@@ -91,16 +68,6 @@ Devvit.addCustomPostType({
 
             <spacer size="large" />
 
-            {/* Game results if available */}
-            {gameResult && (
-              <vstack gap="small" alignment="start">
-                <text size="medium" weight="bold" color="#ffd700">Last Game Results:</text>
-                <text size="small" color="#ffffff">Score: {gameResult.score}</text>
-                <text size="small" color="#ffffff">Impostors Found: {gameResult.impostorsFound}/3</text>
-                <text size="small" color="#ffffff">Time: {Math.floor(gameResult.timeUsed / 60)}:{(gameResult.timeUsed % 60).toString().padStart(2, '0')}</text>
-              </vstack>
-            )}
-
             {/* Action buttons */}
             <vstack gap="medium" alignment="start">
               <button 
@@ -110,12 +77,12 @@ Devvit.addCustomPostType({
                 backgroundColor="#ffd700"
                 textColor="#000000"
               >
-                {gameResult ? 'PLAY AGAIN' : 'PLAY'}
+                🚀 START HUNTING
               </button>
               
               <button 
                 onPress={() => {
-                  context.ui.showToast('Game Rules: Find all 3 hidden alien impostors in the crowd! Base: +100pts per impostor, Time bonus: +10pts per 10 seconds left, Completion bonus: +2pts per second remaining. You have 5 minutes!');
+                  context.ui.showToast('Find all 3 hidden alien impostors in the crowd! Base: +100pts per impostor, Time bonus, Completion bonus. You have 5 minutes!');
                 }}
                 appearance="secondary"
                 size="medium"
@@ -134,28 +101,29 @@ Devvit.addCustomPostType({
             </text>
           </vstack>
 
-          {/* Right side - Character illustration */}
+          {/* Right side - Simple character illustration using text */}
           <vstack alignment="center middle" width="200px" height="300px">
-            {/* Large alien character */}
-            <vstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="150px" height="200px">
-              <text size="xxlarge" color="#000000">👽</text>
+            {/* Large alien character using emoji */}
+            <vstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="150px" height="150px">
+              <text size="xxlarge">👽</text>
             </vstack>
             
-            {/* Decorative stars around */}
+            <spacer size="medium" />
+            
+            {/* Decorative elements */}
             <hstack gap="large" alignment="center" width="100%">
               <text color="#ff4444" size="large">✦</text>
-              <spacer />
               <text color="#ffd700" size="large">✦</text>
+              <text color="#ff4444" size="large">✦</text>
             </hstack>
           </vstack>
         </hstack>
 
-        {/* Decorative elements */}
+        {/* Corner decorations using simple text */}
         <vstack alignment="top start" padding="medium">
           <text color="#ff4444" size="large">✦</text>
         </vstack>
         
-        {/* Bolt.new branding in top right */}
         <vstack alignment="top end" padding="medium">
           <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="80px" height="80px">
             <text color="#000000" size="medium" weight="bold">BOLT</text>
@@ -188,7 +156,7 @@ Devvit.addMenuItem({
       post = await reddit.submitPost({
         title: 'Reddimposters - Find the Alien Impostors!',
         subredditName: subreddit.name,
-        preview: <Preview text="Click PLAY to start hunting for alien impostors!" />,
+        preview: <Preview text="Click START HUNTING to begin your alien hunt!" />,
       });
       
       ui.showToast({ text: 'Created Reddimposters game!' });

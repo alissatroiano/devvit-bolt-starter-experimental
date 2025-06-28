@@ -6,7 +6,7 @@ interface Impostor {
   y: number;
   width: number;
   height: number;
-  image: string;
+  emoji: string;
   found: boolean;
 }
 
@@ -134,22 +134,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               style={{
                 left: `${impostor.x}%`,
                 top: `${impostor.y}%`,
-                width: `${impostor.width}px`,
-                height: `${impostor.height}px`,
+                fontSize: `${impostor.width / 10}rem`,
                 transform: 'translate(-50%, -50%)',
                 zIndex: gameState.foundImpostors.includes(impostor.id) ? 1000 : Math.floor(Math.random() * 50),
+                filter: gameState.foundImpostors.includes(impostor.id) 
+                  ? 'grayscale(100%) brightness(0.5)' 
+                  : 'drop-shadow(0 0 10px rgba(0, 255, 0, 0.3))'
               }}
             >
-              <img
-                src={impostor.image}
-                alt="Hidden Impostor"
-                className="w-full h-full object-contain"
-                style={{
-                  filter: gameState.foundImpostors.includes(impostor.id) 
-                    ? 'grayscale(100%) brightness(0.5)' 
-                    : 'drop-shadow(0 0 10px rgba(0, 255, 0, 0.3))'
-                }}
-              />
+              {impostor.emoji}
               
               {/* Found marker */}
               {gameState.foundImpostors.includes(impostor.id) && (
