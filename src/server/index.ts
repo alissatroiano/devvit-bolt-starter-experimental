@@ -136,19 +136,8 @@ function getSafeContext() {
       hasRedis: !!context.redis
     });
     
-    // Import Redis dynamically for production
-    let redis;
-    try {
-      const { getRedis } = require('@devvit/redis');
-      redis = getRedis();
-    } catch (err) {
-      console.error('Failed to get Redis:', err);
-      redis = mockRedis; // Fallback to mock
-    }
-    
     return {
       ...context,
-      redis,
       isDevelopment: false
     };
   } catch (error) {

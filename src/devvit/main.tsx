@@ -2,22 +2,14 @@ import { Devvit, useState, useWebView } from '@devvit/public-api';
 
 Devvit.configure({
   redditAPI: true,
+  redis: true,
 });
 
 export const Preview: Devvit.BlockComponent<{ text?: string }> = ({ text = 'Loading...' }) => {
   return (
     <zstack width={'100%'} height={'100%'} alignment="center middle">
       <vstack width={'100%'} height={'100%'} alignment="center middle">
-        <image
-          url="loading.gif"
-          description="Loading..."
-          height={'140px'}
-          width={'140px'}
-          imageHeight={'240px'}
-          imageWidth={'240px'}
-        />
-        <spacer size="small" />
-        <text maxWidth={`80%`} size="large" weight="bold" alignment="center middle" wrap>
+        <text size="large" weight="bold" alignment="center middle" wrap>
           {text}
         </text>
       </vstack>
@@ -32,17 +24,11 @@ Devvit.addCustomPostType({
   render: (context) => {
     // Load username with `useAsync` hook
     const [username] = useState(async () => {
-      return (await context.reddit.getCurrentUsername()) ?? 'anon';
-    });
-
-    // Load saved game result
-    const [gameResult] = useState(async () => {
       try {
-        // In a real implementation, you'd load this from Redis
-        // For now, we'll show a placeholder
-        return null;
-      } catch {
-        return null;
+        return (await context.reddit.getCurrentUsername()) ?? 'anon';
+      } catch (error) {
+        console.error('Error getting username:', error);
+        return 'anon';
       }
     });
 
@@ -52,11 +38,22 @@ Devvit.addCustomPostType({
 
       // Handle messages sent from the web view (if needed)
       async onMessage(message, _webView) {
-        // Handle any messages from the webview if needed
         console.log('Message from webview:', message);
+        try {
+          // Handle any messages from the webview if needed
+          if (message.type === 'GAME_COMPLETED') {
+            context.ui.showToast('Game completed! Score: ' + message.score);
+          }
+        } catch (error) {
+          console.error('Error handling webview message:', error);
+        }
       },
       onUnmount() {
-        context.ui.showToast('Game closed! Your score has been saved.');
+        try {
+          context.ui.showToast('Game closed! Thanks for playing!');
+        } catch (error) {
+          console.error('Error on webview unmount:', error);
+        }
       },
     });
 
@@ -87,33 +84,31 @@ Devvit.addCustomPostType({
 
             <spacer size="large" />
 
-            {/* Game stats if available */}
-            {gameResult && (
-              <vstack gap="small" alignment="start">
-                <text size="medium" weight="bold" color="#ffd700">Last Game:</text>
-                <text size="small" color="#ffffff">Score: {gameResult.score}</text>
-                <text size="small" color="#ffffff">Time: {gameResult.time}s</text>
-              </vstack>
-            )}
-
             {/* Action buttons */}
             <vstack gap="medium" alignment="start">
               <button 
-                onPress={() => webView.mount()}
+                onPress={() => {
+                  try {
+                    webView.mount();
+                  } catch (error) {
+                    console.error('Error mounting webview:', error);
+                    context.ui.showToast('Error loading game. Please try again.');
+                  }
+                }}
                 appearance="primary"
                 size="large"
               >
-                PLAY
+                🎮 PLAY GAME
               </button>
               
               <button 
                 onPress={() => {
-                  context.ui.showToast('Game Rules: Find all 3 hidden alien impostors in the crowd! You have 2 minutes. Each impostor is worth 100 points plus time bonus!');
+                  context.ui.showToast('🎯 Find all hidden alien impostors in the crowd!\n⏱️ You have 2 minutes to find them all\n🏆 Score points for each impostor found\n💡 Look carefully - some are well hidden!');
                 }}
                 appearance="secondary"
                 size="medium"
               >
-                HOW TO PLAY
+                📖 HOW TO PLAY
               </button>
             </vstack>
 
@@ -178,14 +173,18 @@ Devvit.addMenuItem({
       post = await reddit.submitPost({
         title: 'Reddimposters - Find the Alien Impostors!',
         subredditName: subreddit.name,
-        preview: <Preview text="Click PLAY to start hunting for alien impostors!" />,
+        preview: <Preview text="🎮 Click PLAY GAME to start hunting for alien impostors!" />,
       });
       
       ui.showToast({ text: 'Created Reddimposters game!' });
       ui.navigateTo(post.url);
     } catch (error) {
       if (post) {
-        await post.remove(false);
+        try {
+          await post.remove(false);
+        } catch (removeError) {
+          console.error('Error removing post:', removeError);
+        }
       }
       if (error instanceof Error) {
         ui.showToast({ text: `Error creating game: ${error.message}` });
