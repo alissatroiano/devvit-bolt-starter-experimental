@@ -66,35 +66,60 @@ export const Game: React.FC = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [serverHealth, setServerHealth] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setShowBanner(!hostname.endsWith('devvit.net'));
   }, []);
 
-  // Check server health
-  const checkServerHealth = useCallback(async () => {
+  // Check server health with retry logic
+  const checkServerHealth = useCallback(async (attempt = 1): Promise<boolean> => {
     try {
-      const response = await fetch('/api/health');
+      console.log(`Health check attempt ${attempt}`);
+      const response = await fetch('/api/health', {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
       if (response.ok) {
         const result = await response.json();
-        console.log('Server health check:', result);
+        console.log('Server health check result:', result);
         setServerHealth('healthy');
+        setRetryCount(0);
         return true;
       } else {
+        console.error('Health check failed with status:', response.status);
         setServerHealth('unhealthy');
         return false;
       }
     } catch (err) {
-      console.error('Server health check failed:', err);
+      console.error(`Server health check failed (attempt ${attempt}):`, err);
       setServerHealth('unhealthy');
+      
+      // Retry up to 3 times with exponential backoff
+      if (attempt < 3) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`Retrying health check in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return checkServerHealth(attempt + 1);
+      }
+      
       return false;
     }
   }, []);
 
   const fetchGameState = useCallback(async () => {
     try {
-      const response = await fetch('/api/game-state');
+      const response = await fetch('/api/game-state', {
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
       
       if (!response.ok) {
         // Don't throw error for 404s during polling
@@ -146,19 +171,18 @@ export const Game: React.FC = () => {
       });
       
       console.log('Join response status:', response.status);
-      console.log('Join response headers:', Object.fromEntries(response.headers.entries()));
       
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Join request failed:', errorText);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`Server error (${response.status}). Please try again.`);
       }
       
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const responseText = await response.text();
         console.error('Non-JSON response:', responseText);
-        throw new Error('Server returned non-JSON response');
+        throw new Error('Server returned invalid response');
       }
       
       const result = await response.json();
@@ -176,7 +200,10 @@ export const Game: React.FC = () => {
             try {
               const startResponse = await fetch('/api/start-game', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json'
+                },
               });
               
               if (startResponse.ok) {
@@ -196,7 +223,8 @@ export const Game: React.FC = () => {
       }
     } catch (err) {
       console.error('Error joining game:', err);
-      setError(`Network error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`Connection error: ${err instanceof Error ? err.message : 'Please try again'}`);
+      setRetryCount(prev => prev + 1);
     } finally {
       setLoading(false);
     }
@@ -206,7 +234,10 @@ export const Game: React.FC = () => {
     try {
       const response = await fetch('/api/find-impostor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ x, y }),
       });
       
@@ -249,20 +280,20 @@ export const Game: React.FC = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (gameState && gameStarted) {
+    if (gameState && gameStarted && serverHealth === 'healthy') {
       interval = setInterval(fetchGameState, 2000); // Poll every 2 seconds
     }
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [gameState, gameStarted, fetchGameState]);
+  }, [gameState, gameStarted, serverHealth, fetchGameState]);
 
   // Update game timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
-    if (gameState && gameState.phase === 'playing') {
+    if (gameState && gameState.phase === 'playing' && serverHealth === 'healthy') {
       interval = setInterval(async () => {
         try {
           await fetch('/api/update-timer', {
@@ -278,13 +309,15 @@ export const Game: React.FC = () => {
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [gameState]);
+  }, [gameState, serverHealth]);
 
   // Check for existing game and server health on load
   useEffect(() => {
     const init = async () => {
-      await checkServerHealth();
-      await fetchGameState();
+      const isHealthy = await checkServerHealth();
+      if (isHealthy) {
+        await fetchGameState();
+      }
       setLoading(false);
     };
     init();
@@ -360,12 +393,25 @@ export const Game: React.FC = () => {
             {error && (
               <div className="mt-4 p-3 bg-red-600 bg-opacity-20 border border-red-500 rounded-lg text-red-300 text-sm">
                 {error}
+                {retryCount > 0 && (
+                  <div className="mt-2 text-xs">
+                    Retry attempt: {retryCount}
+                  </div>
+                )}
               </div>
             )}
             
             {serverHealth === 'unhealthy' && (
               <div className="mt-4 p-3 bg-yellow-600 bg-opacity-20 border border-yellow-500 rounded-lg text-yellow-300 text-sm">
-                Server connection issues. Please refresh the page or try again later.
+                <div className="flex items-center justify-between">
+                  <span>Server connection issues. Please try again.</span>
+                  <button 
+                    onClick={() => checkServerHealth()}
+                    className="ml-2 px-2 py-1 bg-yellow-600 text-black rounded text-xs hover:bg-yellow-500"
+                  >
+                    Retry
+                  </button>
+                </div>
               </div>
             )}
           </div>
