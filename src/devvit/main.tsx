@@ -52,12 +52,50 @@ Devvit.addCustomPostType({
       }
     });
 
-    // Load community leaderboard (top 5)
+    // Load community leaderboard using sorted sets
     const [leaderboard] = useState(async () => {
       try {
-        const leaderboardData = await context.redis.get('reddimposters:leaderboard');
-        return leaderboardData ? JSON.parse(leaderboardData) : [];
-      } catch {
+        // Get top 10 players from the sorted set (highest scores first)
+        const topPlayers = await context.redis.zRange('reddimposters:leaderboard', 0, 9, { 
+          by: 'rank',
+          reverse: true 
+        });
+        
+        // Get detailed info for each player
+        const leaderboardWithDetails = await Promise.all(
+          topPlayers.map(async (entry) => {
+            try {
+              const playerData = await context.redis.get(`reddimposters:player:${entry.member}`);
+              const details = playerData ? JSON.parse(playerData) : null;
+              
+              return {
+                userId: entry.member,
+                username: details?.username || 'Unknown Player',
+                score: entry.score,
+                timeUsed: details?.timeUsed || 0,
+                impostorsFound: details?.impostorsFound || 0,
+                totalImpostors: details?.totalImpostors || 3,
+                isComplete: details?.isComplete || false,
+                completedAt: details?.completedAt || 0
+              };
+            } catch {
+              return {
+                userId: entry.member,
+                username: 'Unknown Player',
+                score: entry.score,
+                timeUsed: 0,
+                impostorsFound: 0,
+                totalImpostors: 3,
+                isComplete: false,
+                completedAt: 0
+              };
+            }
+          })
+        );
+        
+        return leaderboardWithDetails;
+      } catch (error) {
+        console.error('Error loading leaderboard:', error);
         return [];
       }
     });
@@ -76,7 +114,7 @@ Devvit.addCustomPostType({
             
             if (!userId || !currentUsername) return;
 
-            // Save user's result
+            // Save detailed player data
             const gameResult = {
               username: currentUsername,
               score,
@@ -87,45 +125,31 @@ Devvit.addCustomPostType({
               isComplete: impostorsFound === totalImpostors
             };
 
+            await context.redis.set(`reddimposters:player:${userId}`, JSON.stringify(gameResult));
             await context.redis.set(`reddimposters:result:${userId}`, JSON.stringify(gameResult));
 
-            // Update leaderboard
-            let leaderboard = [];
-            try {
-              const leaderboardData = await context.redis.get('reddimposters:leaderboard');
-              leaderboard = leaderboardData ? JSON.parse(leaderboardData) : [];
-            } catch {
-              leaderboard = [];
+            // Update leaderboard using sorted set
+            // Use score as the sort value, with a tie-breaker for completion time
+            let sortScore = score;
+            
+            // For completed games, add a small bonus based on speed (faster = higher score)
+            if (gameResult.isComplete) {
+              // Add completion bonus and speed bonus (max 300 seconds = 300 bonus points)
+              const speedBonus = Math.max(0, 300 - timeUsed);
+              sortScore = score + speedBonus;
             }
 
-            // Remove any existing entry for this user
-            leaderboard = leaderboard.filter((entry: any) => entry.userId !== userId);
-            
-            // Add new entry
-            leaderboard.push({
-              userId,
-              username: currentUsername,
-              score,
-              timeUsed,
-              impostorsFound,
-              totalImpostors,
-              completedAt: Date.now(),
-              isComplete: impostorsFound === totalImpostors
+            // Add player to leaderboard sorted set
+            await context.redis.zAdd('reddimposters:leaderboard', {
+              member: userId,
+              score: sortScore
             });
 
-            // Sort by score (desc), then by time (asc) for completed games
-            leaderboard.sort((a: any, b: any) => {
-              if (b.score !== a.score) return b.score - a.score;
-              if (a.isComplete && b.isComplete) return a.timeUsed - b.timeUsed;
-              return 0;
-            });
+            // Get player's rank
+            const rank = await context.redis.zRank('reddimposters:leaderboard', userId, { reverse: true });
+            const totalPlayers = await context.redis.zCard('reddimposters:leaderboard');
 
-            // Keep only top 10
-            leaderboard = leaderboard.slice(0, 10);
-
-            await context.redis.set('reddimposters:leaderboard', JSON.stringify(leaderboard));
-
-            context.ui.showToast(`Game saved! Score: ${score} points`);
+            context.ui.showToast(`Game saved! Score: ${score} points (Rank: ${(rank || 0) + 1}/${totalPlayers})`);
           } catch (error) {
             console.error('Error saving game result:', error);
             context.ui.showToast('Error saving game result');
@@ -142,6 +166,21 @@ Devvit.addCustomPostType({
       const secs = seconds % 60;
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
+
+    // Get user's current rank if they have a score
+    const [userRank] = useState(async () => {
+      try {
+        const userId = context.userId;
+        if (!userId) return null;
+        
+        const rank = await context.redis.zRank('reddimposters:leaderboard', userId, { reverse: true });
+        const totalPlayers = await context.redis.zCard('reddimposters:leaderboard');
+        
+        return rank !== null ? { rank: rank + 1, total: totalPlayers } : null;
+      } catch {
+        return null;
+      }
+    });
 
     // Render the custom post type with logo in top right
     return (
@@ -185,7 +224,14 @@ Devvit.addCustomPostType({
             {/* User's best result */}
             {userResult && (
               <vstack gap="small" alignment="start" backgroundColor="#16213e" cornerRadius="medium" padding="medium" width="100%">
-                <text size="medium" weight="bold" color="#ffd700">🏆 Your Best Score</text>
+                <hstack gap="medium" alignment="center">
+                  <text size="medium" weight="bold" color="#ffd700">🏆 Your Best Score</text>
+                  {userRank && (
+                    <text size="small" color="#888888">
+                      Rank #{userRank.rank} of {userRank.total}
+                    </text>
+                  )}
+                </hstack>
                 <hstack gap="large" alignment="center">
                   <vstack alignment="center">
                     <text size="large" weight="bold" color="#ffffff">{userResult.score}</text>
@@ -210,10 +256,10 @@ Devvit.addCustomPostType({
             {leaderboard && leaderboard.length > 0 && (
               <vstack gap="small" alignment="start" backgroundColor="#16213e" cornerRadius="medium" padding="medium" width="100%">
                 <text size="medium" weight="bold" color="#ffd700">🌟 Community Leaders</text>
-                {leaderboard.slice(0, 3).map((entry: any, index: number) => (
+                {leaderboard.slice(0, 5).map((entry: any, index: number) => (
                   <hstack key={entry.userId} gap="medium" alignment="center" width="100%">
                     <text size="medium" color="#ffd700" weight="bold">
-                      {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                     </text>
                     <text size="small" color="#ffffff" grow>
                       {entry.username}
@@ -226,9 +272,9 @@ Devvit.addCustomPostType({
                     )}
                   </hstack>
                 ))}
-                {leaderboard.length > 3 && (
+                {leaderboard.length > 5 && (
                   <text size="small" color="#888888">
-                    +{leaderboard.length - 3} more players
+                    +{leaderboard.length - 5} more players
                   </text>
                 )}
               </vstack>
