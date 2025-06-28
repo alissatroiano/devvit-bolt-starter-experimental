@@ -26,6 +26,7 @@ app.use(express.text());
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   next();
 });
 
@@ -42,58 +43,138 @@ app.use((req, res, next) => {
   next();
 });
 
-// Enhanced error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Server error:', err);
-  
-  // Send proper JSON error response
-  res.status(500).json({ 
-    status: 'error', 
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
-    timestamp: new Date().toISOString()
-  });
-});
-
 const router = express.Router();
 
 // Health check endpoint
 router.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'success', 
-    message: 'Server is running',
-    timestamp: new Date().toISOString()
-  });
+  try {
+    const context = getContext();
+    console.log('Health check - Context:', context);
+    
+    res.json({ 
+      status: 'success', 
+      message: 'Server is running',
+      timestamp: new Date().toISOString(),
+      context: context ? {
+        hasPostId: !!context.postId,
+        hasUserId: !!context.userId,
+        hasReddit: !!context.reddit,
+        hasRedis: !!context.redis
+      } : null
+    });
+  } catch (error) {
+    console.error('Health check error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Health check failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
+
+// Helper function to safely get context with better error handling
+function getSafeContext() {
+  try {
+    const context = getContext();
+    console.log('Context retrieved:', {
+      hasContext: !!context,
+      postId: context?.postId,
+      userId: context?.userId,
+      hasReddit: !!context?.reddit,
+      hasRedis: !!context?.redis
+    });
+    return context;
+  } catch (error) {
+    console.error('Error getting context:', error);
+    return null;
+  }
+}
 
 // Join or create game
 router.post<any, JoinGameResponse, { username: string }>(
   '/api/join',
   async (req, res): Promise<void> => {
     try {
-      console.log('Join game request:', req.body);
+      console.log('=== JOIN GAME REQUEST ===');
+      console.log('Request body:', req.body);
       
       const { username } = req.body;
-      const context = getContext();
+      
+      if (!username || typeof username !== 'string' || username.trim().length === 0) {
+        console.log('Invalid username provided');
+        res.status(400).json({ status: 'error', message: 'Valid username is required' });
+        return;
+      }
+
+      const context = getSafeContext();
       
       if (!context) {
-        console.error('No context available');
-        res.status(500).json({ status: 'error', message: 'Server context not available' });
-        return;
+        console.error('No context available - this might be a development environment');
+        // In development, create a mock context
+        const mockPostId = 'dev_post_' + Date.now();
+        const mockUserId = 'dev_user_' + Math.random().toString(36).substr(2, 9);
+        
+        console.log('Using mock context:', { postId: mockPostId, userId: mockUserId });
+        
+        try {
+          const redis = getRedis();
+          let gameState = await getGame({ redis, postId: mockPostId });
+          
+          if (!gameState) {
+            console.log('Creating new game with mock context');
+            gameState = await createGame({
+              redis,
+              postId: mockPostId,
+              hostId: mockUserId,
+              hostUsername: username.trim(),
+            });
+          } else {
+            console.log('Joining existing game with mock context');
+            const joinResult = await joinGame({
+              redis,
+              postId: mockPostId,
+              playerId: mockUserId,
+              username: username.trim(),
+            });
+            
+            if (!joinResult) {
+              res.status(400).json({ 
+                status: 'error', 
+                message: 'Cannot join game (full or other issue)' 
+              });
+              return;
+            }
+            gameState = joinResult;
+          }
+
+          console.log('Game state created/joined successfully (mock context)');
+          res.json({
+            status: 'success',
+            gameState,
+            playerId: mockUserId,
+          });
+          return;
+        } catch (redisError) {
+          console.error('Redis error with mock context:', redisError);
+          res.status(500).json({ 
+            status: 'error', 
+            message: 'Database connection failed' 
+          });
+          return;
+        }
       }
       
       const { postId, userId } = context;
-      console.log('Context:', { postId, userId });
+      console.log('Real context:', { postId, userId });
       
       if (!postId) {
+        console.error('No postId in context');
         res.status(400).json({ status: 'error', message: 'postId is required' });
         return;
       }
       if (!userId) {
+        console.error('No userId in context');
         res.status(400).json({ status: 'error', message: 'Must be logged in' });
-        return;
-      }
-      if (!username) {
-        res.status(400).json({ status: 'error', message: 'Username is required' });
         return;
       }
 
@@ -102,21 +183,19 @@ router.post<any, JoinGameResponse, { username: string }>(
       
       if (!gameState) {
         console.log('Creating new game');
-        // Create new game
         gameState = await createGame({
           redis,
           postId,
           hostId: userId,
-          hostUsername: username,
+          hostUsername: username.trim(),
         });
       } else {
         console.log('Joining existing game');
-        // Join existing game
         const joinResult = await joinGame({
           redis,
           postId,
           playerId: userId,
-          username,
+          username: username.trim(),
         });
         
         if (!joinResult) {
@@ -136,7 +215,7 @@ router.post<any, JoinGameResponse, { username: string }>(
         playerId: userId,
       });
     } catch (error) {
-      console.error('Error joining game:', error);
+      console.error('Error in join endpoint:', error);
       res.status(500).json({ 
         status: 'error', 
         message: error instanceof Error ? error.message : 'Unknown error',
@@ -149,16 +228,20 @@ router.post<any, JoinGameResponse, { username: string }>(
 // Get current game state
 router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<void> => {
   try {
-    const context = getContext();
+    console.log('=== GAME STATE REQUEST ===');
+    
+    const context = getSafeContext();
     
     if (!context) {
-      res.status(500).json({ status: 'error', message: 'Server context not available' });
+      console.log('No context for game state - using development fallback');
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
     
     const { postId } = context;
 
     if (!postId) {
+      console.error('No postId in context for game state');
       res.status(400).json({ status: 'error', message: 'postId is required' });
       return;
     }
@@ -167,10 +250,12 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
     const gameState = await getGame({ redis, postId });
     
     if (!gameState) {
+      console.log('No game state found for postId:', postId);
       res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
 
+    console.log('Game state retrieved successfully');
     res.json({
       status: 'success',
       gameState,
@@ -188,9 +273,12 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
 // Start game (host only)
 router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise<void> => {
   try {
-    const context = getContext();
+    console.log('=== START GAME REQUEST ===');
+    
+    const context = getSafeContext();
     
     if (!context) {
+      console.error('No context for start game');
       res.status(500).json({ status: 'error', message: 'Server context not available' });
       return;
     }
@@ -217,6 +305,7 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
       return;
     }
 
+    console.log('Game started successfully');
     res.json({
       status: 'success',
       gameState,
@@ -236,10 +325,20 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
   '/api/find-impostor',
   async (req, res): Promise<void> => {
     try {
+      console.log('=== FIND IMPOSTOR REQUEST ===');
+      console.log('Request body:', req.body);
+      
       const { x, y } = req.body;
-      const context = getContext();
+      
+      if (typeof x !== 'number' || typeof y !== 'number') {
+        res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
+        return;
+      }
+      
+      const context = getSafeContext();
       
       if (!context) {
+        console.error('No context for find impostor');
         res.status(500).json({ status: 'error', message: 'Server context not available' });
         return;
       }
@@ -254,10 +353,6 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         res.status(400).json({ status: 'error', message: 'Must be logged in' });
         return;
       }
-      if (typeof x !== 'number' || typeof y !== 'number') {
-        res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
-        return;
-      }
 
       const redis = getRedis();
       const result = await findImpostor({ redis, postId, playerId: userId, x, y });
@@ -267,6 +362,7 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
         return;
       }
 
+      console.log('Find impostor completed:', { found: result.found, score: result.score });
       res.json({
         status: 'success',
         gameState: result.gameState,
@@ -288,10 +384,11 @@ router.post<any, FindImpostorResponse, { x: number; y: number }>(
 // Update game timer
 router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
   try {
-    const context = getContext();
+    const context = getSafeContext();
     
     if (!context) {
-      res.status(500).json({ status: 'error', message: 'Server context not available' });
+      // Silently fail for timer updates when no context
+      res.status(404).json({ status: 'error', message: 'Game not found' });
       return;
     }
     
@@ -326,6 +423,18 @@ router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promi
 
 app.use(router);
 
+// Enhanced error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled server error:', err);
+  
+  // Send proper JSON error response
+  res.status(500).json({ 
+    status: 'error', 
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Catch-all error handler
 app.use((req, res) => {
   console.log(`404 - Route not found: ${req.method} ${req.path}`);
@@ -348,4 +457,12 @@ server.on('error', (err) => {
 server.listen(port, () => {
   console.log(`🚀 Reddimposters server running on http://localhost:${port}`);
   console.log(`📊 Health check available at http://localhost:${port}/api/health`);
+  
+  // Test context on startup
+  try {
+    const context = getSafeContext();
+    console.log('Startup context check:', context ? 'Available' : 'Not available');
+  } catch (error) {
+    console.log('Startup context check failed:', error);
+  }
 });

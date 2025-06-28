@@ -65,10 +65,31 @@ export const Game: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [showBanner, setShowBanner] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
+  const [serverHealth, setServerHealth] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setShowBanner(!hostname.endsWith('devvit.net'));
+  }, []);
+
+  // Check server health
+  const checkServerHealth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/health');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Server health check:', result);
+        setServerHealth('healthy');
+        return true;
+      } else {
+        setServerHealth('unhealthy');
+        return false;
+      }
+    } catch (err) {
+      console.error('Server health check failed:', err);
+      setServerHealth('unhealthy');
+      return false;
+    }
   }, []);
 
   const fetchGameState = useCallback(async () => {
@@ -102,23 +123,46 @@ export const Game: React.FC = () => {
 
   const joinGame = useCallback(async (username: string) => {
     setLoading(true);
+    setError('');
+    
     try {
+      // First check server health
+      const isHealthy = await checkServerHealth();
+      if (!isHealthy) {
+        setError('Server is not responding. Please try again in a moment.');
+        setLoading(false);
+        return;
+      }
+
+      console.log('Attempting to join game with username:', username);
+      
       const response = await fetch('/api/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ username: username.trim() }),
       });
       
+      console.log('Join response status:', response.status);
+      console.log('Join response headers:', Object.fromEntries(response.headers.entries()));
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Join request failed:', errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Non-JSON response:', responseText);
         throw new Error('Server returned non-JSON response');
       }
       
       const result = await response.json();
+      console.log('Join result:', result);
       
       if (result.status === 'success') {
         setGameState(result.gameState);
@@ -152,11 +196,11 @@ export const Game: React.FC = () => {
       }
     } catch (err) {
       console.error('Error joining game:', err);
-      setError('Network error - please check your connection');
+      setError(`Network error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [checkServerHealth]);
 
   const findImpostor = useCallback(async (x: number, y: number) => {
     try {
@@ -236,14 +280,15 @@ export const Game: React.FC = () => {
     };
   }, [gameState]);
 
-  // Check for existing game on load
+  // Check for existing game and server health on load
   useEffect(() => {
     const init = async () => {
+      await checkServerHealth();
       await fetchGameState();
       setLoading(false);
     };
     init();
-  }, [fetchGameState]);
+  }, [fetchGameState, checkServerHealth]);
 
   if (loading) {
     return (
@@ -251,6 +296,11 @@ export const Game: React.FC = () => {
         <div className="text-center">
           <div className="text-white text-xl mb-4">Loading game...</div>
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd700] mx-auto"></div>
+          {serverHealth === 'unhealthy' && (
+            <div className="mt-4 text-red-400 text-sm">
+              Server connection issues detected...
+            </div>
+          )}
         </div>
       </div>
     );
@@ -266,6 +316,12 @@ export const Game: React.FC = () => {
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-[#ff4444] mb-2">REDDIMPOSTERS</h1>
               <p className="text-[#ffd700] font-medium">Find the Alien Impostors</p>
+              {serverHealth === 'healthy' && (
+                <div className="mt-2 text-xs text-green-400">🟢 Server Online</div>
+              )}
+              {serverHealth === 'unhealthy' && (
+                <div className="mt-2 text-xs text-red-400">🔴 Server Issues</div>
+              )}
             </div>
             
             <div className="space-y-4 mb-6">
@@ -295,14 +351,21 @@ export const Game: React.FC = () => {
                 const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
                 joinGame(randomUsername);
               }}
-              className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 rounded-lg font-semibold transition-colors text-black"
+              disabled={serverHealth === 'unhealthy'}
+              className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors text-black"
             >
-              🚀 START HUNTING
+              {serverHealth === 'unhealthy' ? '⚠️ SERVER OFFLINE' : '🚀 START HUNTING'}
             </button>
             
             {error && (
               <div className="mt-4 p-3 bg-red-600 bg-opacity-20 border border-red-500 rounded-lg text-red-300 text-sm">
                 {error}
+              </div>
+            )}
+            
+            {serverHealth === 'unhealthy' && (
+              <div className="mt-4 p-3 bg-yellow-600 bg-opacity-20 border border-yellow-500 rounded-lg text-yellow-300 text-sm">
+                Server connection issues. Please refresh the page or try again later.
               </div>
             )}
           </div>
