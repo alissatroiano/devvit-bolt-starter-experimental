@@ -1,12 +1,6 @@
 import express from 'express';
 import { createServer, getServerPort } from '@devvit/server';
 import {
-  JoinGameResponse,
-  GameStateResponse,
-  StartGameResponse,
-  FindImpostorResponse,
-} from '../shared/types/game';
-import {
   createGame,
   getGame,
   joinGame,
