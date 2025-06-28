@@ -67,7 +67,8 @@ export const createGame = async ({
 
   gameState.players[hostId] = host;
 
-  await redis.setEx(getGameKey(postId), GAME_EXPIRY, JSON.stringify(gameState));
+  // Use set with expiration instead of setEx
+  await redis.set(getGameKey(postId), JSON.stringify(gameState), { expiration: new Date(Date.now() + GAME_EXPIRY * 1000) });
   return gameState;
 };
 
@@ -89,7 +90,8 @@ export const updateGame = async ({
   redis: Context['redis'] | RedisClient;
   gameState: GameState;
 }): Promise<void> => {
-  await redis.setEx(getGameKey(gameState.id), GAME_EXPIRY, JSON.stringify(gameState));
+  // Use set with expiration instead of setEx
+  await redis.set(getGameKey(gameState.id), JSON.stringify(gameState), { expiration: new Date(Date.now() + GAME_EXPIRY * 1000) });
 };
 
 export const joinGame = async ({
@@ -276,7 +278,7 @@ function updateLeaderboard(gameState: GameState): void {
       playerId: player.id,
       username: player.username,
       score: player.score,
-      timeCompleted: player.timeCompleted,
+      timeCompleted: player.timeCompleted || undefined, // Fix the type issue
     }))
     .sort((a, b) => {
       // Sort by score first, then by completion time
