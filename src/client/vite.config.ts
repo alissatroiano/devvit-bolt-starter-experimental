@@ -19,5 +19,14 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: true,
     chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        // Ensure consistent asset naming for Devvit
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
   },
+  base: './', // Use relative paths for better compatibility
 });
