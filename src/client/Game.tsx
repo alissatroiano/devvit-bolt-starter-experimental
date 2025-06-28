@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameBoard } from './components/GameBoard';
 import { GameResults } from './components/GameResults';
-import { GameState, Player, Impostor } from '../shared/types/game';
 import packageJson from '../../package.json';
 
 const Banner = () => {
@@ -58,357 +57,183 @@ function extractSubredditName(): string | null {
   return subreddit;
 }
 
+interface Impostor {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  image: string;
+  found: boolean;
+}
+
+interface GameState {
+  phase: 'start' | 'playing' | 'ended';
+  timeLeft: number;
+  score: number;
+  foundImpostors: string[];
+  startTime?: number;
+  endTime?: number;
+}
+
 export const Game: React.FC = () => {
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>('');
+  const [gameState, setGameState] = useState<GameState>({
+    phase: 'start',
+    timeLeft: 300, // 5 minutes
+    score: 0,
+    foundImpostors: []
+  });
+  
   const [showBanner, setShowBanner] = useState(false);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [serverHealth, setServerHealth] = useState<'unknown' | 'healthy' | 'unhealthy'>('unknown');
-  const [retryCount, setRetryCount] = useState(0);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
-  const [serverDiagnostics, setServerDiagnostics] = useState<any>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Predefined impostor locations
+  const impostors: Impostor[] = [
+    {
+      id: 'impostor1',
+      x: 15,
+      y: 25,
+      width: 60,
+      height: 80,
+      image: '/assets/imposter-1.png',
+      found: false
+    },
+    {
+      id: 'impostor2', 
+      x: 65,
+      y: 45,
+      width: 50,
+      height: 70,
+      image: '/assets/imposter-2.png',
+      found: false
+    },
+    {
+      id: 'impostor3',
+      x: 35,
+      y: 70,
+      width: 45,
+      height: 65,
+      image: '/assets/imposter-3.png',
+      found: false
+    }
+  ];
 
   useEffect(() => {
     const hostname = window.location.hostname;
     setShowBanner(!hostname.endsWith('devvit.net'));
   }, []);
 
-  // Enhanced server health check with better diagnostics
-  const checkServerHealth = useCallback(async (attempt = 1): Promise<boolean> => {
-    try {
-      console.log(`🔍 Health check attempt ${attempt}`);
-      setConnectionAttempts(prev => prev + 1);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
-      const response = await fetch('/api/health', {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Server health check result:', result);
-        setServerHealth('healthy');
-        setServerDiagnostics(result.diagnostics);
-        setRetryCount(0);
-        setConnectionAttempts(0);
-        setError('');
-        return true;
-      } else {
-        console.error('❌ Health check failed with status:', response.status);
-        const errorText = await response.text();
-        console.error('Error details:', errorText);
-        setServerHealth('unhealthy');
-        setError(`Server error (${response.status}): ${errorText}`);
-        return false;
+  // Game timer
+  useEffect(() => {
+    if (gameState.phase === 'playing') {
+      timerRef.current = setInterval(() => {
+        setGameState(prev => {
+          const newTimeLeft = prev.timeLeft - 1;
+          if (newTimeLeft <= 0) {
+            // Game over - time's up
+            return {
+              ...prev,
+              phase: 'ended',
+              timeLeft: 0,
+              endTime: Date.now()
+            };
+          }
+          return { ...prev, timeLeft: newTimeLeft };
+        });
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
       }
-    } catch (err) {
-      console.error(`❌ Server health check failed (attempt ${attempt}):`, err);
-      setServerHealth('unhealthy');
-      
-      if (err instanceof Error && err.name === 'AbortError') {
-        setError('Connection timeout - server may be starting up');
-      } else {
-        setError(`Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
-      
-      // Retry up to 3 times with exponential backoff
-      if (attempt < 3) {
-        const delay = Math.min(Math.pow(2, attempt) * 2000, 10000); // Max 10s delay
-        console.log(`⏳ Retrying health check in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return checkServerHealth(attempt + 1);
-      }
-      
-      return false;
     }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [gameState.phase]);
+
+  const startGame = useCallback(() => {
+    setGameState({
+      phase: 'playing',
+      timeLeft: 300,
+      score: 0,
+      foundImpostors: [],
+      startTime: Date.now()
+    });
   }, []);
 
-  const fetchGameState = useCallback(async () => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch('/api/game-state', {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        // Don't throw error for 404s during polling
-        if (response.status === 404) return;
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error('Server returned non-JSON response');
-      }
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
-      } else if (result.message !== 'Game not found') {
-        setError(result.message || 'Error fetching game state');
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('⏰ Game state fetch timed out');
-        return;
-      }
-      console.error('❌ Error fetching game state:', err);
-      // Don't set error for network issues during polling
-    }
-  }, []);
+  const findImpostor = useCallback((x: number, y: number) => {
+    if (gameState.phase !== 'playing') return { found: false, score: 0 };
 
-  const joinGame = useCallback(async (username: string) => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      // First check server health
-      console.log('🔍 Checking server health before joining...');
-      const isHealthy = await checkServerHealth();
-      if (!isHealthy) {
-        setError('Server is not responding. Please try again in a moment.');
-        setLoading(false);
-        return;
-      }
+    // Check if click is within any impostor's bounds
+    const foundImpostor = impostors.find(impostor => {
+      if (gameState.foundImpostors.includes(impostor.id)) return false;
+      
+      const withinX = x >= impostor.x && x <= impostor.x + impostor.width;
+      const withinY = y >= impostor.y && y <= impostor.y + impostor.height;
+      
+      return withinX && withinY;
+    });
 
-      console.log('🎮 Attempting to join game with username:', username);
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
-      
-      const response = await fetch('/api/join', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ username: username.trim() }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('📡 Join response status:', response.status);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Join request failed:', errorText);
+    if (foundImpostor) {
+      const points = 100; // Base points for finding an impostor
+      const timeBonus = Math.floor(gameState.timeLeft / 10); // Bonus for time remaining
+      const totalPoints = points + timeBonus;
+
+      setGameState(prev => {
+        const newFoundImpostors = [...prev.foundImpostors, foundImpostor.id];
+        const newScore = prev.score + totalPoints;
         
-        // Try to parse as JSON for better error message
-        try {
-          const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.message || `Server error (${response.status})`);
-        } catch {
-          throw new Error(`Server error (${response.status}). Please try again.`);
+        // Check if all impostors found
+        if (newFoundImpostors.length === impostors.length) {
+          // Game won!
+          const finalScore = newScore + (prev.timeLeft * 2); // Big bonus for completing
+          
+          // Save to localStorage for Devvit preview
+          const gameResult = {
+            score: finalScore,
+            timeUsed: 300 - prev.timeLeft,
+            impostorsFound: newFoundImpostors.length,
+            totalImpostors: impostors.length,
+            completedAt: Date.now()
+          };
+          localStorage.setItem('reddimposters_result', JSON.stringify(gameResult));
+          
+          return {
+            ...prev,
+            phase: 'ended',
+            score: finalScore,
+            foundImpostors: newFoundImpostors,
+            endTime: Date.now()
+          };
         }
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error('❌ Non-JSON response:', responseText);
-        throw new Error('Server returned invalid response');
-      }
-      
-      const result = await response.json();
-      console.log('✅ Join result:', result);
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setCurrentPlayer(result.gameState.players[result.playerId]);
-        setError('');
-        setGameStarted(true);
         
-        // Auto-start the game if we're the host
-        if (result.gameState.host === result.playerId && result.gameState.phase === 'waiting') {
-          console.log('👑 Auto-starting game as host...');
-          setTimeout(async () => {
-            try {
-              const startResponse = await fetch('/api/start-game', {
-                method: 'POST',
-                headers: { 
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json'
-                },
-              });
-              
-              if (startResponse.ok) {
-                const startResult = await startResponse.json();
-                
-                if (startResult.status === 'success') {
-                  setGameState(startResult.gameState);
-                  console.log('🚀 Game auto-started successfully');
-                }
-              }
-            } catch (err) {
-              console.error('❌ Error auto-starting game:', err);
-            }
-          }, 500);
-        }
-      } else {
-        setError(result.message || 'Error joining game');
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        setError('Connection timed out. Please try again.');
-      } else {
-        console.error('❌ Error joining game:', err);
-        setError(`Connection error: ${err instanceof Error ? err.message : 'Please try again'}`);
-      }
-      setRetryCount(prev => prev + 1);
-    } finally {
-      setLoading(false);
-    }
-  }, [checkServerHealth]);
-
-  const findImpostor = useCallback(async (x: number, y: number) => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch('/api/find-impostor', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ x, y }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      
-      if (result.status === 'success') {
-        setGameState(result.gameState);
-        setError('');
         return {
-          found: result.found,
-          impostor: result.impostor,
-          score: result.score,
+          ...prev,
+          score: newScore,
+          foundImpostors: newFoundImpostors
         };
-      } else {
-        setError(result.message || 'Error finding impostor');
-        return { found: false, score: 0 };
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('⏰ Find impostor request timed out');
-        return { found: false, score: 0 };
-      }
-      console.error('❌ Error finding impostor:', err);
-      setError('Network error');
-      return { found: false, score: 0 };
+      });
+
+      return { found: true, impostor: foundImpostor, score: totalPoints };
     }
+
+    return { found: false, score: 0 };
+  }, [gameState.phase, gameState.foundImpostors, gameState.timeLeft]);
+
+  const playAgain = useCallback(() => {
+    setGameState({
+      phase: 'start',
+      timeLeft: 300,
+      score: 0,
+      foundImpostors: []
+    });
   }, []);
 
-  // Update current player when game state changes
-  useEffect(() => {
-    if (gameState && currentPlayer) {
-      const updatedPlayer = gameState.players[currentPlayer.id];
-      if (updatedPlayer) {
-        setCurrentPlayer(updatedPlayer);
-      }
-    }
-  }, [gameState, currentPlayer]);
-
-  // Poll for game state updates
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (gameState && gameStarted && serverHealth === 'healthy') {
-      interval = setInterval(fetchGameState, 3000); // Poll every 3 seconds
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [gameState, gameStarted, serverHealth, fetchGameState]);
-
-  // Update game timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (gameState && gameState.phase === 'playing' && serverHealth === 'healthy') {
-      interval = setInterval(async () => {
-        try {
-          await fetch('/api/update-timer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          });
-        } catch (err) {
-          console.error('❌ Error updating timer:', err);
-        }
-      }, 1000); // Update every second
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [gameState, serverHealth]);
-
-  // Check for existing game and server health on load
-  useEffect(() => {
-    const init = async () => {
-      console.log('🚀 Initializing game...');
-      const isHealthy = await checkServerHealth();
-      if (isHealthy) {
-        await fetchGameState();
-      }
-      setLoading(false);
-    };
-    init();
-  }, [fetchGameState, checkServerHealth]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white text-xl mb-4">Loading game...</div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ffd700] mx-auto"></div>
-          {serverHealth === 'unhealthy' && (
-            <div className="mt-4 text-red-400 text-sm">
-              Server connection issues detected... (Attempt {connectionAttempts})
-            </div>
-          )}
-          {serverDiagnostics && (
-            <div className="mt-4 text-xs text-gray-400 max-w-md">
-              Context: {serverDiagnostics.context?.isDevelopment ? 'Development' : 'Production'} | 
-              Redis: {serverDiagnostics.redis?.type}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Show start screen if no game has been started
-  if (!gameStarted && !gameState) {
+  if (gameState.phase === 'start') {
     return (
       <div className="min-h-screen bg-[#1a1a2e] text-white">
         {showBanner && <Banner />}
@@ -417,141 +242,60 @@ export const Game: React.FC = () => {
             <div className="text-center mb-8">
               <h1 className="text-3xl font-bold text-[#ff4444] mb-2">REDDIMPOSTERS</h1>
               <p className="text-[#ffd700] font-medium">Find the Alien Impostors</p>
-              {serverHealth === 'healthy' && (
-                <div className="mt-2 text-xs text-green-400">🟢 Server Online</div>
-              )}
-              {serverHealth === 'unhealthy' && (
-                <div className="mt-2 text-xs text-red-400">🔴 Server Issues (Attempts: {connectionAttempts})</div>
-              )}
-              {serverDiagnostics && (
-                <div className="mt-1 text-xs text-gray-400">
-                  {serverDiagnostics.context?.isDevelopment ? '🔧 Dev Mode' : '🌐 Production'} | 
-                  Redis: {serverDiagnostics.redis?.working ? '✅' : '❌'}
-                </div>
-              )}
             </div>
             
             <div className="space-y-4 mb-6">
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
                 <h3 className="text-[#ffd700] font-bold mb-2">🎯 Objective</h3>
-                <p className="text-sm text-gray-300">Find all 12 alien impostors hidden in the crowd before time runs out!</p>
+                <p className="text-sm text-gray-300">Find all 3 alien impostors hidden in the crowd before time runs out!</p>
               </div>
               
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
                 <h3 className="text-[#ffd700] font-bold mb-2">⏱️ Time Limit</h3>
-                <p className="text-sm text-gray-300">You have 5 minutes to find as many impostors as possible.</p>
+                <p className="text-sm text-gray-300">You have 5 minutes to find all the impostors.</p>
               </div>
               
               <div className="bg-[#1a1a2e] rounded-lg p-4 border border-gray-600">
                 <h3 className="text-[#ffd700] font-bold mb-2">🏆 Scoring</h3>
                 <div className="text-sm text-gray-300 space-y-1">
-                  <div>Easy (large): +10 points</div>
-                  <div>Medium (small): +25 points</div>
-                  <div>Hard (tiny): +50 points</div>
-                  <div>+ Speed bonus for quick finds!</div>
+                  <div>Base: +100 points per impostor</div>
+                  <div>Time bonus: +10 points per 10 seconds left</div>
+                  <div>Completion bonus: +2 points per second remaining</div>
                 </div>
               </div>
             </div>
             
             <button
-              onClick={() => {
-                const randomUsername = `Player${Math.floor(Math.random() * 10000)}`;
-                joinGame(randomUsername);
-              }}
-              disabled={serverHealth === 'unhealthy' || loading}
-              className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors text-black"
+              onClick={startGame}
+              className="w-full py-3 px-4 bg-[#ffd700] hover:bg-yellow-500 rounded-lg font-semibold transition-colors text-black"
             >
-              {serverHealth === 'unhealthy' ? '⚠️ SERVER OFFLINE' : loading ? '🔄 CONNECTING...' : '🚀 START HUNTING'}
+              🚀 START HUNTING
             </button>
-            
-            {error && (
-              <div className="mt-4 p-3 bg-red-600 bg-opacity-20 border border-red-500 rounded-lg text-red-300 text-sm">
-                {error}
-                {retryCount > 0 && (
-                  <div className="mt-2 text-xs">
-                    Retry attempt: {retryCount}
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {serverHealth === 'unhealthy' && (
-              <div className="mt-4 p-3 bg-yellow-600 bg-opacity-20 border border-yellow-500 rounded-lg text-yellow-300 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>Server connection issues. Please try again.</span>
-                  <button 
-                    onClick={() => checkServerHealth()}
-                    className="ml-2 px-2 py-1 bg-yellow-600 text-black rounded text-xs hover:bg-yellow-500"
-                    disabled={loading}
-                  >
-                    {loading ? '...' : 'Retry'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
     );
   }
 
-  const renderGameContent = () => {
-    if (!gameState) {
-      return (
-        <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-white text-xl mb-4">Failed to load game</div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="bg-[#ffd700] text-black px-4 py-2 rounded hover:bg-yellow-500"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      );
-    }
+  if (gameState.phase === 'playing') {
+    return (
+      <GameBoard
+        gameState={gameState}
+        impostors={impostors}
+        onFindImpostor={findImpostor}
+      />
+    );
+  }
 
-    switch (gameState.phase) {
-      case 'waiting':
-        // Show a brief waiting message then auto-start
-        return (
-          <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-white text-xl mb-4">Preparing game...</div>
-              <div className="animate-pulse text-gray-400">Starting in a moment...</div>
-            </div>
-          </div>
-        );
-      
-      case 'playing':
-        return (
-          <GameBoard
-            gameState={gameState}
-            currentPlayer={currentPlayer}
-            onFindImpostor={findImpostor}
-            error={error}
-          />
-        );
-      
-      case 'ended':
-        return (
-          <GameResults
-            gameState={gameState}
-            currentPlayer={currentPlayer}
-            onPlayAgain={() => window.location.reload()}
-          />
-        );
-      
-      default:
-        return <div className="text-white">Unknown game state</div>;
-    }
-  };
+  if (gameState.phase === 'ended') {
+    return (
+      <GameResults
+        gameState={gameState}
+        impostors={impostors}
+        onPlayAgain={playAgain}
+      />
+    );
+  }
 
-  return (
-    <div className="min-h-screen bg-[#1a1a2e] text-white">
-      {showBanner && <Banner />}
-      {renderGameContent()}
-    </div>
-  );
+  return null;
 };

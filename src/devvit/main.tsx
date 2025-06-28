@@ -39,6 +39,17 @@ Devvit.addCustomPostType({
       return (await context.reddit.getCurrentUsername()) ?? 'anon';
     });
 
+    // Check for saved game results
+    const [gameResult] = useState(async () => {
+      try {
+        // In a real implementation, you'd get this from Redis using the user's ID
+        // For now, we'll simulate a result
+        return null;
+      } catch {
+        return null;
+      }
+    });
+
     const webView = useWebView({
       // URL of your web view content
       url: 'index.html',
@@ -49,11 +60,11 @@ Devvit.addCustomPostType({
         console.log('Message from webview:', message);
       },
       onUnmount() {
-        context.ui.showToast('Game closed!');
+        context.ui.showToast('Game closed! Check back for your results.');
       },
     });
 
-    // Render the custom post type matching the Figma design
+    // Render the custom post type with game results if available
     return (
       <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
         {/* Background with gradient effect */}
@@ -80,6 +91,16 @@ Devvit.addCustomPostType({
 
             <spacer size="large" />
 
+            {/* Game results if available */}
+            {gameResult && (
+              <vstack gap="small" alignment="start">
+                <text size="medium" weight="bold" color="#ffd700">Last Game Results:</text>
+                <text size="small" color="#ffffff">Score: {gameResult.score}</text>
+                <text size="small" color="#ffffff">Impostors Found: {gameResult.impostorsFound}/3</text>
+                <text size="small" color="#ffffff">Time: {Math.floor(gameResult.timeUsed / 60)}:{(gameResult.timeUsed % 60).toString().padStart(2, '0')}</text>
+              </vstack>
+            )}
+
             {/* Action buttons */}
             <vstack gap="medium" alignment="start">
               <button 
@@ -89,19 +110,19 @@ Devvit.addCustomPostType({
                 backgroundColor="#ffd700"
                 textColor="#000000"
               >
-                PLAY
+                {gameResult ? 'PLAY AGAIN' : 'PLAY'}
               </button>
               
               <button 
                 onPress={() => {
-                  context.ui.showToast('Game Rules: Find all hidden alien impostors in the crowd! Easy: +10pts, Medium: +25pts, Hard: +50pts. You have 5 minutes!');
+                  context.ui.showToast('Game Rules: Find all 3 hidden alien impostors in the crowd! Base: +100pts per impostor, Time bonus: +10pts per 10 seconds left, Completion bonus: +2pts per second remaining. You have 5 minutes!');
                 }}
                 appearance="secondary"
                 size="medium"
                 backgroundColor="#333333"
                 textColor="#ffffff"
               >
-                FAQ
+                HOW TO PLAY
               </button>
             </vstack>
 

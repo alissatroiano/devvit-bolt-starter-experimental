@@ -1,57 +1,67 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { GameState, Player, Impostor } from '../../shared/types/game';
-import { CrowdScene } from './CrowdScene';
+
+interface Impostor {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  image: string;
+  found: boolean;
+}
+
+interface GameState {
+  phase: 'start' | 'playing' | 'ended';
+  timeLeft: number;
+  score: number;
+  foundImpostors: string[];
+  startTime?: number;
+  endTime?: number;
+}
 
 interface GameBoardProps {
   gameState: GameState;
-  currentPlayer: Player | null;
-  onFindImpostor: (x: number, y: number) => Promise<{ found: boolean; impostor?: Impostor; score: number }>;
-  error: string;
+  impostors: Impostor[];
+  onFindImpostor: (x: number, y: number) => { found: boolean; impostor?: Impostor; score: number };
 }
 
 export const GameBoard: React.FC<GameBoardProps> = ({
   gameState,
-  currentPlayer,
+  impostors,
   onFindImpostor,
-  error,
 }) => {
   const [clicking, setClicking] = useState(false);
   const [lastClick, setLastClick] = useState<{ x: number; y: number } | null>(null);
   const [showSuccess, setShowSuccess] = useState<{ impostor: Impostor; x: number; y: number } | null>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
 
-  const handlePersonClick = useCallback(async (x: number, y: number) => {
+  const handleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (clicking || gameState.phase !== 'playing') return;
 
     setClicking(true);
     
-    // Visual feedback
     const rect = gameAreaRef.current?.getBoundingClientRect();
-    if (rect) {
-      setLastClick({ 
-        x: (x / 100) * rect.width, 
-        y: (y / 100) * rect.height 
+    if (!rect) return;
+
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+
+    setLastClick({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+
+    const result = onFindImpostor(x, y);
+    
+    if (result.found && result.impostor) {
+      setShowSuccess({
+        impostor: result.impostor,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
       });
+      
+      setTimeout(() => setShowSuccess(null), 2000);
     }
 
-    try {
-      const result = await onFindImpostor(x, y);
-      
-      if (result.found && result.impostor && rect) {
-        setShowSuccess({
-          impostor: result.impostor,
-          x: (x / 100) * rect.width,
-          y: (y / 100) * rect.height,
-        });
-        
-        setTimeout(() => setShowSuccess(null), 2000);
-      }
-    } catch (err) {
-      console.error('Error finding impostor:', err);
-    } finally {
-      setClicking(false);
-      setTimeout(() => setLastClick(null), 500);
-    }
+    setClicking(false);
+    setTimeout(() => setLastClick(null), 500);
   }, [clicking, gameState.phase, onFindImpostor]);
 
   const formatTime = (seconds: number) => {
@@ -60,9 +70,8 @@ export const GameBoard: React.FC<GameBoardProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const foundCount = currentPlayer?.foundImpostors.length || 0;
-  const totalCount = gameState.impostors.length;
-  const timeLeft = gameState.timeLeft || 0;
+  const foundCount = gameState.foundImpostors.length;
+  const totalCount = impostors.length;
 
   return (
     <div className="h-screen bg-[#0a0a0f] text-white flex flex-col">
@@ -77,32 +86,80 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               {foundCount}/{totalCount} FOUND
             </div>
             <div className="bg-gradient-to-r from-green-500 to-emerald-500 px-4 py-2 rounded-lg font-bold shadow-lg">
-              {currentPlayer?.score || 0} PTS
+              {gameState.score} PTS
             </div>
           </div>
         </div>
         
         <div className="flex items-center space-x-4">
           <div className={`px-4 py-2 rounded-lg font-bold shadow-lg ${
-            timeLeft <= 30 
+            gameState.timeLeft <= 30 
               ? 'bg-gradient-to-r from-red-500 to-pink-500 animate-pulse' 
               : 'bg-gradient-to-r from-yellow-500 to-orange-500'
           }`}>
-            ⏱️ {formatTime(timeLeft)}
-          </div>
-          <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-2 rounded-lg">
-            👤 {currentPlayer?.username}
+            ⏱️ {formatTime(gameState.timeLeft)}
           </div>
         </div>
       </div>
 
       {/* Main Game Canvas */}
-      <div className="flex-1 relative" ref={gameAreaRef}>
-        <CrowdScene
-          impostors={gameState.impostors}
-          onPersonClick={handlePersonClick}
-          foundImpostors={currentPlayer?.foundImpostors || []}
-        />
+      <div className="flex-1 relative overflow-hidden" ref={gameAreaRef} onClick={handleClick}>
+        {/* Background crowd scene */}
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-900 via-purple-900 to-indigo-900">
+          {/* Generate crowd of people */}
+          {Array.from({ length: 200 }, (_, i) => (
+            <div
+              key={`person_${i}`}
+              className="absolute text-gray-300 cursor-pointer select-none"
+              style={{
+                left: `${Math.random() * 95}%`,
+                top: `${Math.random() * 95}%`,
+                fontSize: `${0.8 + Math.random() * 1.2}rem`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: Math.floor(Math.random() * 10),
+                filter: `brightness(${0.6 + Math.random() * 0.4})`,
+              }}
+            >
+              {['🧑', '👩', '👨', '🧑‍💼', '👩‍💼', '👨‍💼', '🧑‍🎓', '👩‍🎓'][Math.floor(Math.random() * 8)]}
+            </div>
+          ))}
+
+          {/* Hidden impostors */}
+          {impostors.map((impostor) => (
+            <div
+              key={impostor.id}
+              className={`absolute transition-all duration-200 select-none ${
+                gameState.foundImpostors.includes(impostor.id) ? 'opacity-50 grayscale' : ''
+              }`}
+              style={{
+                left: `${impostor.x}%`,
+                top: `${impostor.y}%`,
+                width: `${impostor.width}px`,
+                height: `${impostor.height}px`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: gameState.foundImpostors.includes(impostor.id) ? 1000 : Math.floor(Math.random() * 50),
+              }}
+            >
+              <img
+                src={impostor.image}
+                alt="Hidden Impostor"
+                className="w-full h-full object-contain"
+                style={{
+                  filter: gameState.foundImpostors.includes(impostor.id) 
+                    ? 'grayscale(100%) brightness(0.5)' 
+                    : 'drop-shadow(0 0 10px rgba(0, 255, 0, 0.3))'
+                }}
+              />
+              
+              {/* Found marker */}
+              {gameState.foundImpostors.includes(impostor.id) && (
+                <div className="absolute inset-0 border-4 border-green-400 bg-green-400 bg-opacity-20 rounded-lg flex items-center justify-center">
+                  <div className="text-green-400 font-bold text-2xl">✓</div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
 
         {/* Click feedback */}
         {lastClick && (
@@ -126,8 +183,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
             }}
           >
             <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-6 py-3 rounded-lg font-bold animate-bounce shadow-2xl border border-green-300">
-              🎉 +{showSuccess.impostor.difficulty === 'easy' ? 10 : 
-                     showSuccess.impostor.difficulty === 'medium' ? 25 : 50} points!
+              🎉 Impostor Found! +100 points!
             </div>
           </div>
         )}
@@ -141,58 +197,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({
         </div>
       </div>
 
-      {/* Bottom Panel - Enhanced UI */}
+      {/* Bottom Panel */}
       <div className="bg-gradient-to-r from-[#1a1a2e] to-[#16213e] border-t border-purple-500/30 p-6 shadow-2xl">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              🎯 TARGET IDENTIFICATION
+              🎯 HUNT PROGRESS
             </h2>
             <div className="text-sm text-gray-400 bg-gray-800/50 px-3 py-2 rounded-lg">
-              Click on suspicious alien figures in the crowd
+              Click on the hidden alien impostors in the crowd!
             </div>
           </div>
           
-          <div className="grid grid-cols-3 gap-6 mb-6">
-            {/* Easy Impostors */}
-            <div className="bg-gradient-to-br from-green-900/50 to-green-800/30 rounded-xl p-4 border border-green-500/50 shadow-lg hover:shadow-green-500/20 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-green-400 font-bold text-lg">EASY</span>
-                <span className="text-3xl">👽</span>
-              </div>
-              <div className="text-sm text-gray-300 mb-2">Large, obvious alien figures</div>
-              <div className="text-green-400 font-bold text-xl">+10 POINTS</div>
-              <div className="text-xs text-green-300 mt-1">Easy to spot, good for beginners</div>
-            </div>
-
-            {/* Medium Impostors */}
-            <div className="bg-gradient-to-br from-yellow-900/50 to-orange-800/30 rounded-xl p-4 border border-yellow-500/50 shadow-lg hover:shadow-yellow-500/20 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-yellow-400 font-bold text-lg">MEDIUM</span>
-                <span className="text-3xl">👽</span>
-              </div>
-              <div className="text-sm text-gray-300 mb-2">Smaller, partially hidden</div>
-              <div className="text-yellow-400 font-bold text-xl">+25 POINTS</div>
-              <div className="text-xs text-yellow-300 mt-1">Requires careful observation</div>
-            </div>
-
-            {/* Hard Impostors */}
-            <div className="bg-gradient-to-br from-red-900/50 to-pink-800/30 rounded-xl p-4 border border-red-500/50 shadow-lg hover:shadow-red-500/20 transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-red-400 font-bold text-lg">HARD</span>
-                <span className="text-3xl">👽</span>
-              </div>
-              <div className="text-sm text-gray-300 mb-2">Tiny, expertly camouflaged</div>
-              <div className="text-red-400 font-bold text-xl">+50 POINTS</div>
-              <div className="text-xs text-red-300 mt-1">Master-level challenge</div>
-            </div>
-          </div>
-
-          {/* Enhanced Progress Bar */}
+          {/* Progress Bar */}
           <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-600/50">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-lg font-bold text-cyan-400">🔍 HUNT PROGRESS</span>
-              <span className="text-lg font-bold text-cyan-400">{foundCount}/{totalCount} ALIENS CAPTURED</span>
+              <span className="text-lg font-bold text-cyan-400">🔍 ALIENS CAPTURED</span>
+              <span className="text-lg font-bold text-cyan-400">{foundCount}/{totalCount}</span>
             </div>
             <div className="relative w-full bg-gray-700 rounded-full h-4 overflow-hidden">
               <div 
@@ -201,7 +222,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
               >
                 <div className="absolute inset-0 bg-white/20 animate-pulse rounded-full" />
               </div>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse" />
             </div>
             <div className="flex justify-between text-xs text-gray-400 mt-2">
               <span>Hunt Started</span>
@@ -211,16 +231,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Enhanced Error Display */}
-      {error && (
-        <div className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-red-600 to-pink-600 border border-red-400 rounded-xl text-white text-sm max-w-sm shadow-2xl animate-pulse">
-          <div className="flex items-center space-x-2">
-            <span className="text-xl">⚠️</span>
-            <span>{error}</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
