@@ -1,5 +1,5 @@
 import express from 'express';
-import { createServer, getContext, getServerPort } from '@devvit/server';
+import { createServer, getServerPort } from '@devvit/server';
 import {
   JoinGameResponse,
   GameStateResponse,
@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.text());
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
@@ -46,6 +46,8 @@ const router = express.Router();
 // Development mode detection - more robust
 const isDevelopment = () => {
   try {
+    // Try to import getContext dynamically
+    const { getContext } = require('@devvit/server');
     const context = getContext();
     return !context || !context.postId || !context.userId;
   } catch {
@@ -63,12 +65,7 @@ class MockRedis {
     return value || null;
   }
   
-  async setEx(key: string, ttl: number, value: string): Promise<void> {
-    console.log(`MockRedis SETEX ${key}: ${value.length} chars`);
-    this.storage.set(key, value);
-  }
-  
-  async set(key: string, value: string): Promise<void> {
+  async set(key: string, value: string, options?: { expiration?: Date }): Promise<void> {
     console.log(`MockRedis SET ${key}: ${value.length} chars`);
     this.storage.set(key, value);
   }
@@ -77,13 +74,14 @@ class MockRedis {
 const mockRedis = new MockRedis();
 
 // Health check endpoint
-router.get('/api/health', (req, res) => {
+router.get('/api/health', (_req, res) => {
   try {
     const devMode = isDevelopment();
     let contextInfo = null;
     
     if (!devMode) {
       try {
+        const { getContext } = require('@devvit/server');
         const context = getContext();
         contextInfo = {
           hasPostId: !!context?.postId,
@@ -130,6 +128,7 @@ function getSafeContext() {
   }
   
   try {
+    const { getContext } = require('@devvit/server');
     const context = getContext();
     if (!context) {
       throw new Error('Context is null');
@@ -172,80 +171,76 @@ function getSafeContext() {
 }
 
 // Join or create game
-router.post<any, JoinGameResponse, { username: string }>(
-  '/api/join',
-  async (req, res): Promise<void> => {
-    try {
-      console.log('=== JOIN GAME REQUEST ===');
-      console.log('Request body:', req.body);
-      
-      const { username } = req.body;
-      
-      if (!username || typeof username !== 'string' || username.trim().length === 0) {
-        console.log('❌ Invalid username provided');
-        res.status(400).json({ status: 'error', message: 'Valid username is required' });
-        return;
-      }
-
-      const context = getSafeContext();
-      const { postId, userId, redis, isDevelopment: devMode } = context;
-      
-      console.log('📋 Using context:', { postId, userId, devMode });
-      
-      if (!postId || !userId) {
-        console.error('❌ Missing postId or userId in context');
-        res.status(500).json({ status: 'error', message: 'Server configuration error' });
-        return;
-      }
-
-      let gameState = await getGame({ redis, postId });
-      
-      if (!gameState) {
-        console.log('🎮 Creating new game');
-        gameState = await createGame({
-          redis,
-          postId,
-          hostId: userId,
-          hostUsername: username.trim(),
-        });
-      } else {
-        console.log('🔗 Joining existing game');
-        const joinResult = await joinGame({
-          redis,
-          postId,
-          playerId: userId,
-          username: username.trim(),
-        });
-        
-        if (!joinResult) {
-          res.status(400).json({ 
-            status: 'error', 
-            message: 'Cannot join game (full or other issue)' 
-          });
-          return;
-        }
-        gameState = joinResult;
-      }
-
-      console.log('✅ Game state created/joined successfully');
-      res.json({
-        status: 'success',
-        gameState,
-        playerId: userId,
-      });
-    } catch (error) {
-      console.error('❌ Error in join endpoint:', error);
-      res.status(500).json({ 
-        status: 'error', 
-        message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        timestamp: new Date().toISOString()
-      });
+router.post('/api/join', async (req, res): Promise<void> => {
+  try {
+    console.log('=== JOIN GAME REQUEST ===');
+    console.log('Request body:', req.body);
+    
+    const { username } = req.body;
+    
+    if (!username || typeof username !== 'string' || username.trim().length === 0) {
+      console.log('❌ Invalid username provided');
+      res.status(400).json({ status: 'error', message: 'Valid username is required' } as JoinGameResponse);
+      return;
     }
+
+    const context = getSafeContext();
+    const { postId, userId, redis, isDevelopment: devMode } = context;
+    
+    console.log('📋 Using context:', { postId, userId, devMode });
+    
+    if (!postId || !userId) {
+      console.error('❌ Missing postId or userId in context');
+      res.status(500).json({ status: 'error', message: 'Server configuration error' } as JoinGameResponse);
+      return;
+    }
+
+    let gameState = await getGame({ redis, postId });
+    
+    if (!gameState) {
+      console.log('🎮 Creating new game');
+      gameState = await createGame({
+        redis,
+        postId,
+        hostId: userId,
+        hostUsername: username.trim(),
+      });
+    } else {
+      console.log('🔗 Joining existing game');
+      const joinResult = await joinGame({
+        redis,
+        postId,
+        playerId: userId,
+        username: username.trim(),
+      });
+      
+      if (!joinResult) {
+        res.status(400).json({ 
+          status: 'error', 
+          message: 'Cannot join game (full or other issue)' 
+        } as JoinGameResponse);
+        return;
+      }
+      gameState = joinResult;
+    }
+
+    console.log('✅ Game state created/joined successfully');
+    res.json({
+      status: 'success',
+      gameState,
+      playerId: userId,
+    } as JoinGameResponse);
+  } catch (error) {
+    console.error('❌ Error in join endpoint:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    } as JoinGameResponse);
   }
-);
+});
 
 // Get current game state
-router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<void> => {
+router.get('/api/game-state', async (_req, res): Promise<void> => {
   try {
     console.log('=== GAME STATE REQUEST ===');
     
@@ -256,7 +251,7 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
 
     if (!postId) {
       console.log('❌ No postId for game state');
-      res.status(404).json({ status: 'error', message: 'Game not found' });
+      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
       return;
     }
 
@@ -264,7 +259,7 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
     
     if (!gameState) {
       console.log('📭 No game state found for postId:', postId);
-      res.status(404).json({ status: 'error', message: 'Game not found' });
+      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
       return;
     }
 
@@ -272,19 +267,18 @@ router.get<any, GameStateResponse>('/api/game-state', async (req, res): Promise<
     res.json({
       status: 'success',
       gameState,
-    });
+    } as GameStateResponse);
   } catch (error) {
     console.error('❌ Error getting game state:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      timestamp: new Date().toISOString()
-    });
+    } as GameStateResponse);
   }
 });
 
 // Start game (host only)
-router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise<void> => {
+router.post('/api/start-game', async (_req, res): Promise<void> => {
   try {
     console.log('=== START GAME REQUEST ===');
     
@@ -294,11 +288,11 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
     console.log('📋 Start game context:', { postId, userId, devMode });
 
     if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' });
+      res.status(400).json({ status: 'error', message: 'postId is required' } as StartGameResponse);
       return;
     }
     if (!userId) {
-      res.status(400).json({ status: 'error', message: 'Must be logged in' });
+      res.status(400).json({ status: 'error', message: 'Must be logged in' } as StartGameResponse);
       return;
     }
 
@@ -308,7 +302,7 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
       res.status(400).json({ 
         status: 'error', 
         message: 'Cannot start game (not host, already started, or not enough players)' 
-      });
+      } as StartGameResponse);
       return;
     }
 
@@ -316,108 +310,102 @@ router.post<any, StartGameResponse>('/api/start-game', async (req, res): Promise
     res.json({
       status: 'success',
       gameState,
-    });
+    } as StartGameResponse);
   } catch (error) {
     console.error('❌ Error starting game:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      timestamp: new Date().toISOString()
-    });
+    } as StartGameResponse);
   }
 });
 
 // Find impostor
-router.post<any, FindImpostorResponse, { x: number; y: number }>(
-  '/api/find-impostor',
-  async (req, res): Promise<void> => {
-    try {
-      console.log('=== FIND IMPOSTOR REQUEST ===');
-      console.log('Request body:', req.body);
-      
-      const { x, y } = req.body;
-      
-      if (typeof x !== 'number' || typeof y !== 'number') {
-        res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' });
-        return;
-      }
-      
-      const context = getSafeContext();
-      const { postId, userId, redis, isDevelopment: devMode } = context;
-      
-      console.log('📋 Find impostor context:', { postId, userId, devMode });
-
-      if (!postId) {
-        res.status(400).json({ status: 'error', message: 'postId is required' });
-        return;
-      }
-      if (!userId) {
-        res.status(400).json({ status: 'error', message: 'Must be logged in' });
-        return;
-      }
-
-      const result = await findImpostor({ redis, postId, playerId: userId, x, y });
-      
-      if (!result.gameState) {
-        res.status(404).json({ status: 'error', message: 'Game not found' });
-        return;
-      }
-
-      console.log('✅ Find impostor completed:', { found: result.found, score: result.score });
-      res.json({
-        status: 'success',
-        gameState: result.gameState,
-        found: result.found,
-        impostor: result.impostor,
-        score: result.score,
-      });
-    } catch (error) {
-      console.error('❌ Error finding impostor:', error);
-      res.status(500).json({ 
-        status: 'error', 
-        message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        timestamp: new Date().toISOString()
-      });
+router.post('/api/find-impostor', async (req, res): Promise<void> => {
+  try {
+    console.log('=== FIND IMPOSTOR REQUEST ===');
+    console.log('Request body:', req.body);
+    
+    const { x, y } = req.body;
+    
+    if (typeof x !== 'number' || typeof y !== 'number') {
+      res.status(400).json({ status: 'error', message: 'Valid x and y coordinates required' } as FindImpostorResponse);
+      return;
     }
+    
+    const context = getSafeContext();
+    const { postId, userId, redis, isDevelopment: devMode } = context;
+    
+    console.log('📋 Find impostor context:', { postId, userId, devMode });
+
+    if (!postId) {
+      res.status(400).json({ status: 'error', message: 'postId is required' } as FindImpostorResponse);
+      return;
+    }
+    if (!userId) {
+      res.status(400).json({ status: 'error', message: 'Must be logged in' } as FindImpostorResponse);
+      return;
+    }
+
+    const result = await findImpostor({ redis, postId, playerId: userId, x, y });
+    
+    if (!result.gameState) {
+      res.status(404).json({ status: 'error', message: 'Game not found' } as FindImpostorResponse);
+      return;
+    }
+
+    console.log('✅ Find impostor completed:', { found: result.found, score: result.score });
+    res.json({
+      status: 'success',
+      gameState: result.gameState,
+      found: result.found,
+      impostor: result.impostor,
+      score: result.score,
+    } as FindImpostorResponse);
+  } catch (error) {
+    console.error('❌ Error finding impostor:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    } as FindImpostorResponse);
   }
-);
+});
 
 // Update game timer
-router.post<any, GameStateResponse>('/api/update-timer', async (req, res): Promise<void> => {
+router.post('/api/update-timer', async (_req, res): Promise<void> => {
   try {
     const context = getSafeContext();
     const { postId, redis } = context;
 
     if (!postId) {
-      res.status(400).json({ status: 'error', message: 'postId is required' });
+      res.status(400).json({ status: 'error', message: 'postId is required' } as GameStateResponse);
       return;
     }
 
     const gameState = await updateGameTimer({ redis, postId });
     
     if (!gameState) {
-      res.status(404).json({ status: 'error', message: 'Game not found' });
+      res.status(404).json({ status: 'error', message: 'Game not found' } as GameStateResponse);
       return;
     }
 
     res.json({
       status: 'success',
       gameState,
-    });
+    } as GameStateResponse);
   } catch (error) {
     console.error('❌ Error updating timer:', error);
     res.status(500).json({ 
       status: 'error', 
       message: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      timestamp: new Date().toISOString()
-    });
+    } as GameStateResponse);
   }
 });
 
 app.use(router);
 
 // Enhanced error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('💥 Unhandled server error:', err);
   
   // Send proper JSON error response
