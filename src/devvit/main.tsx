@@ -143,7 +143,7 @@ Devvit.addCustomPostType({
         
         <vstack alignment="top end" padding="medium">
           <image 
-            url="bolt-white.png" 
+            url="assets/bolt-white.png" 
             imageWidth={60} 
             imageHeight={60} 
             resizeMode="fit"
