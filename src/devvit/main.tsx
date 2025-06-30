@@ -146,8 +146,7 @@ Devvit.addCustomPostType({
         <vstack alignment="top end" padding="medium">
           <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
             
-             <button onPress:context.ui.navigateTo({boltUrl})>
-          
+             <button onPress:context.ui.navigateTo{boltUrl}>
                       <image
               url="bolt-black.png"
               description="bolt"
