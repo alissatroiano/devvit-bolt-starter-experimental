@@ -59,7 +59,7 @@ Devvit.addCustomPostType({
 
     // Render the custom post type
     return (
-      <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
+      <vstack width={'100%'} height={'100%'} backgroundColor="#000000">
         {/* Background with gradient effect */}
         <vstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e" />
         
@@ -160,7 +160,7 @@ Devvit.addCustomPostType({
         <vstack alignment="bottom end" padding="medium">
           <text color="#ff4444" size="large">✦</text>
         </vstack>
-      </zstack>
+      </vstack>
     );
   },
 });
