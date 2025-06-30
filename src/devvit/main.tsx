@@ -56,6 +56,8 @@ Devvit.addCustomPostType({
         }
       },
     });
+    const url = 'https://bolt.new/~/github-qben3rsr';
+
 
     // Render the custom post type
     return (
@@ -143,6 +145,10 @@ Devvit.addCustomPostType({
         
         <vstack alignment="top end" padding="medium">
           <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
+            
+             <button onPress: async (_event, context) => {
+    context.ui.navigateTo(url);
+  }>       
                       <image
               url="bolt-black.png"
               description="bolt"
@@ -151,7 +157,7 @@ Devvit.addCustomPostType({
               height="100px"
               width="100px"
             />
-
+          </button>
           </hstack>
         </vstack>
 
