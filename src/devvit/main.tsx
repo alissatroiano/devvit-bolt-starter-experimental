@@ -143,7 +143,7 @@ Devvit.addCustomPostType({
         
         <vstack alignment="top end" padding="medium">
           <image 
-            url="assets/bolt-white.png" 
+            url="https://neomate.app/white_circle_360x360.png" 
             imageWidth={60} 
             imageHeight={60} 
             resizeMode="fit"
