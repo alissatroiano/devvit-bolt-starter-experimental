@@ -56,8 +56,8 @@ Devvit.addCustomPostType({
         }
       },
     });
-    const boltUrl = 'https://bolt.new/~/github-qben3rsr';
 
+    const boltUrl = 'https://bolt.new/~/github-qben3rsr';
 
     // Render the custom post type
     return (
@@ -144,19 +144,22 @@ Devvit.addCustomPostType({
         </vstack>
         
         <vstack alignment="top end" padding="medium">
-          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
-            
-             <button onPress:context.ui.navigateTo{boltUrl}>
-                      <image
-              url="bolt-black.png"
-              description="bolt"
-              imageHeight={100}
-              imageWidth={100}
-              height="100px"
-              width="100px"
-            />
+          <button 
+            onPress={() => {
+              try {
+                context.ui.navigateTo(boltUrl);
+              } catch (error) {
+                console.error('Error navigating to Bolt:', error);
+                context.ui.showToast('Unable to open Bolt. Please visit bolt.new manually.');
+              }
+            }}
+            appearance="plain"
+          >
+            <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
+              <text color="#000000" size="small" weight="bold">BOLT</text>
+            </hstack>
           </button>
-          </hstack>
+        </vstack>
 
         <vstack alignment="bottom start" padding="medium">
           <text color="#ffd700" size="large">✦</text>
