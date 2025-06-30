@@ -158,7 +158,6 @@ Devvit.addCustomPostType({
             />
           </button>
           </hstack>
-        </vstack>
 
         <vstack alignment="bottom start" padding="medium">
           <text color="#ffd700" size="large">✦</text>
