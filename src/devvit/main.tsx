@@ -141,6 +141,11 @@ Devvit.addCustomPostType({
           <text color="#ff4444" size="large">✦</text>
         </vstack>
         
+        <vstack alignment="top end" padding="medium">
+          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
+            <text color="#000000" size="small" weight="bold">BOLT</text>
+          </hstack>
+        </vstack>
 
         <vstack alignment="bottom start" padding="medium">
           <text color="#ffd700" size="large">✦</text>
