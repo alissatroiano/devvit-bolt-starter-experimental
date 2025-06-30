@@ -146,10 +146,10 @@ Devvit.addCustomPostType({
                       <image
               url="bolt-black.png"
               description="bolt"
-              imageHeight={256}
-              imageWidth={256}
-              height="250px"
-              width="250px"
+              imageHeight={100}
+              imageWidth={100}
+              height="100px"
+              width="100px"
             />
 
           </hstack>
