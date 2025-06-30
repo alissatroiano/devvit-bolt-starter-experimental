@@ -141,14 +141,6 @@ Devvit.addCustomPostType({
           <text color="#ff4444" size="large">✦</text>
         </vstack>
         
-        <vstack alignment="top end" padding="medium">
-          <image 
-            url="https://neomate.app/white_circle_360x360.png" 
-            imageWidth={60} 
-            imageHeight={60} 
-            resizeMode="fit"
-          />
-        </vstack>
 
         <vstack alignment="bottom start" padding="medium">
           <text color="#ffd700" size="large">✦</text>
