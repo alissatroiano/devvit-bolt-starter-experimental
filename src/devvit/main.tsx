@@ -142,9 +142,15 @@ Devvit.addCustomPostType({
         </vstack>
         
         <vstack alignment="top end" padding="medium">
-          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
-            <text color="#000000" size="small" weight="bold">BOLT</text>
-          </hstack>
+         <hstack>
+            <image
+              url="bolt-black.png"
+              description="logo"
+              imageHeight={256}
+              imageWidth={256}
+              height="250px"
+              width="250px"
+            />
         </vstack>
 
         <vstack alignment="bottom start" padding="medium">
