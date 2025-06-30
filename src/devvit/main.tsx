@@ -59,7 +59,7 @@ Devvit.addCustomPostType({
 
     // Render the custom post type
     return (
-      <vstack width={'100%'} height={'100%'} backgroundColor="#000000">
+      <zstack width={'100%'} height={'100%'} backgroundColor="#000000">
         {/* Background with gradient effect */}
         <vstack width={'100%'} height={'100%'} backgroundColor="#1a1a2e" />
         
@@ -142,15 +142,17 @@ Devvit.addCustomPostType({
         </vstack>
         
         <vstack alignment="top end" padding="medium">
-         <hstack>
-            <image
+          <hstack alignment="center middle" backgroundColor="#ffd700" cornerRadius="full" width="60px" height="60px">
+                      <image
               url="bolt-black.png"
-              description="logo"
+              description="bolt"
               imageHeight={256}
               imageWidth={256}
               height="250px"
               width="250px"
             />
+
+          </hstack>
         </vstack>
 
         <vstack alignment="bottom start" padding="medium">
@@ -160,7 +162,7 @@ Devvit.addCustomPostType({
         <vstack alignment="bottom end" padding="medium">
           <text color="#ff4444" size="large">✦</text>
         </vstack>
-      </vstack>
+      </zstack>
     );
   },
 });
